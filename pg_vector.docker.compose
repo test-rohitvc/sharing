@@ -1,0 +1,121 @@
+version: '3.8'
+
+services:
+  # ---------------------------------------------------------
+  # Service 1: PostgreSQL with pgvector extension
+  # ---------------------------------------------------------
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: postgres-vector
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-password}
+      POSTGRES_DB: ${POSTGRES_DB:-vectordb}
+    ports:
+      - "6051:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - dokploy-network
+      - nebula-net
+
+  # ---------------------------------------------------------
+  # Service 2: pgAdmin 4 (Postgres Management UI)
+  # ---------------------------------------------------------
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: pgadmin-vector
+    restart: unless-stopped
+    environment:
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL:-admin@example.com}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD:-admin}
+      PGADMIN_CONFIG_SERVER_MODE: 'False'
+    ports:
+      # Maps Internal 80 -> Public 6056
+      - "6056:80"
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+    networks:
+      - dokploy-network
+      - nebula-net
+
+  # ---------------------------------------------------------
+  # Service 3: Nebula Graph - Meta Service
+  # ---------------------------------------------------------
+  metad:
+    image: vesoft/nebula-metad:v3.6.0
+    container_name: nebula-metad
+    restart: unless-stopped
+    command: --meta_server_addrs=metad:9559 --local_ip=metad --ws_ip=metad --port=9559 --ws_http_port=19559 --data_path=/data/meta
+    ports:
+      - "6054:9559"
+    volumes:
+      - nebula_meta:/data/meta
+    networks:
+      - nebula-net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:19559/status"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # ---------------------------------------------------------
+  # Service 4: Nebula Graph - Graph Service
+  # ---------------------------------------------------------
+  graphd:
+    image: vesoft/nebula-graphd:v3.6.0
+    container_name: nebula-graphd
+    restart: unless-stopped
+    depends_on:
+      - metad
+      - storaged
+    command: --meta_server_addrs=metad:9559 --local_ip=graphd --ws_ip=graphd --port=9669 --ws_http_port=19669 --enable_authorize=false
+    ports:
+      - "6052:9669"
+      - "6053:19669"
+    networks:
+      - nebula-net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:19669/status"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # ---------------------------------------------------------
+  # Service 5: Nebula Graph - Storage Service
+  # ---------------------------------------------------------
+  storaged:
+    image: vesoft/nebula-storaged:v3.6.0
+    container_name: nebula-storaged
+    restart: unless-stopped
+    depends_on:
+      - metad
+    command: --meta_server_addrs=metad:9559 --local_ip=storaged --ws_ip=storaged --port=9779 --ws_http_port=19779 --data_path=/data/storage
+    ports:
+      - "6055:9779"
+    volumes:
+      - nebula_storage:/data/storage
+    networks:
+      - nebula-net
+
+  # Optional Console
+  nebula-console:
+    image: vesoft/nebula-console:v3.6.0
+    container_name: nebula-console
+    entrypoint: /bin/sh
+    command: -c "while true; do sleep 1000; done"
+    networks:
+      - nebula-net
+
+volumes:
+  postgres_data:
+  pgadmin_data: # New volume for pgAdmin settings
+  nebula_meta:
+  nebula_storage:
+
+networks:
+  dokploy-network:
+    external: true
+  nebula-net:
+    driver: bridge
