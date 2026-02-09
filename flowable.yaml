@@ -1,0 +1,48 @@
+version: '3.8'
+
+services:
+  # Database Service (Updated to Postgres 16)
+  flowable-db:
+    image: postgres:16-alpine
+    restart: always
+    environment:
+      - POSTGRES_PASSWORD=flowable
+      - POSTGRES_USER=flowable
+      - POSTGRES_DB=flowable
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - flowable-net
+    # Healthcheck ensures DB is ready before Flowable tries to connect
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U flowable"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Flowable Application (Updated to 6.8.0)
+  flowable-ui:
+    image: flowable/flowable-ui:6.8.0
+    restart: always
+    depends_on:
+      flowable-db:
+        condition: service_healthy
+    environment:
+      - SERVER_PORT=8080
+      # Database Configuration
+      - SPRING_DATASOURCE_DRIVER_CLASS_NAME=org.postgresql.Driver
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://flowable-db:5432/flowable
+      - SPRING_DATASOURCE_USERNAME=flowable
+      - SPRING_DATASOURCE_PASSWORD=flowable
+      # Optimization: Prevent Flowable from locking the database metadata
+      - FLOWABLE_DATABASE_SCHEMA_UPDATE=true
+    ports:
+      - "8080:8080"
+    networks:
+      - flowable-net
+
+volumes:
+  postgres_data:
+
+networks:
+  flowable-net:
