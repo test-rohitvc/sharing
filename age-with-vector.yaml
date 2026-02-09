@@ -1,0 +1,71 @@
+version: '3.8'
+
+services:
+  # ---------------------------------------------------------
+  # Database 1: The Vector Store (Embeddings)
+  # ---------------------------------------------------------
+  vector-db:
+    image: pgvector/pgvector:pg16
+    container_name: postgres-vector
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-password}
+      POSTGRES_DB: vectordb
+    ports:
+      # Public Port 6051 -> Internal 5432
+      - "6051:5432"
+    volumes:
+      - vector_data:/var/lib/postgresql/data
+    networks:
+      - dokploy-network
+
+  # ---------------------------------------------------------
+  # Database 2: The Graph Store (Apache AGE)
+  # ---------------------------------------------------------
+  graph-db:
+    # Official Apache AGE image
+    image: apache/age:release-PG16-1.5.0
+    container_name: postgres-graph
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-password}
+      POSTGRES_DB: graphdb
+    ports:
+      # Public Port 6052 -> Internal 5432
+      - "6052:5432"
+    volumes:
+      - graph_data:/var/lib/postgresql/data
+    networks:
+      - dokploy-network
+    # Load AGE extension config on startup
+    command: ["postgres", "-c", "shared_preload_libraries=age", "-c", "search_path=ag_catalog,\"$user\",public"]
+
+  # ---------------------------------------------------------
+  # Management UI: pgAdmin (Manages BOTH)
+  # ---------------------------------------------------------
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: pgadmin-multi
+    restart: unless-stopped
+    environment:
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL:-admin@example.com}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD:-admin}
+      PGADMIN_CONFIG_SERVER_MODE: 'False'
+    ports:
+      # Public Port 6056 -> Internal 80
+      - "6056:80"
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+    networks:
+      - dokploy-network
+
+volumes:
+  vector_data:
+  graph_data:
+  pgadmin_data:
+
+networks:
+  dokploy-network:
+    external: true
