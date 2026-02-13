@@ -1,0 +1,95 @@
+version: '3.8'
+
+services:
+  # 1. The Shared Database
+  flowable-db:
+    image: postgres:16-alpine
+    restart: always
+    environment:
+      - POSTGRES_PASSWORD=flowable
+      - POSTGRES_USER=flowable
+      - POSTGRES_DB=flowable
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - flowable-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U flowable"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # 2. The UI Application (Port 8080)
+  flowable-ui:
+    image: flowable/flowable-ui:6.8.0
+    restart: always
+    depends_on:
+      flowable-db:
+        condition: service_healthy
+    environment:
+      - SERVER_PORT=8080
+      - SPRING_DATASOURCE_DRIVER_CLASS_NAME=org.postgresql.Driver
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://flowable-db:5432/flowable
+      - SPRING_DATASOURCE_USERNAME=flowable
+      - SPRING_DATASOURCE_PASSWORD=flowable
+      # Master switch: Let UI manage the schema updates
+      - FLOWABLE_DATABASE_SCHEMA_UPDATE=true
+    ports:
+      - "8080:8080"
+    networks:
+      - flowable-net
+
+  # 3. The REST API (Port 8081)
+  flowable-rest:
+    image: flowable/flowable-rest:6.8.0
+    restart: always
+    depends_on:
+      flowable-db:
+        condition: service_healthy
+      flowable-ui:
+        condition: service_started
+    environment:
+      - SERVER_PORT=8080
+      - SPRING_DATASOURCE_DRIVER_CLASS_NAME=org.postgresql.Driver
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://flowable-db:5432/flowable
+      - SPRING_DATASOURCE_USERNAME=flowable
+      - SPRING_DATASOURCE_PASSWORD=flowable
+      - FLOWABLE_DATABASE_SCHEMA_UPDATE=false
+      # REST API Security Config
+      - FLOWABLE_REST_APP_ADMIN_USER-ID=admin
+      - FLOWABLE_REST_APP_ADMIN_PASSWORD=test
+      - FLOWABLE_REST_APP_ADMIN_FIRST-NAME=Rest
+      - FLOWABLE_REST_APP_ADMIN_LAST-NAME=Admin
+    ports:
+      - "8081:8080"
+    networks:
+      - flowable-net
+
+  # 4. The Admin Application (Port 9988)
+  flowable-admin:
+    image: flowable/flowable-admin:6.5.0
+    restart: always
+    depends_on:
+      flowable-db:
+        condition: service_healthy
+    environment:
+      - SERVER_PORT=8080
+      - SPRING_DATASOURCE_DRIVER_CLASS_NAME=org.postgresql.Driver
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://flowable-db:5432/flowable
+      - SPRING_DATASOURCE_USERNAME=flowable
+      - SPRING_DATASOURCE_PASSWORD=flowable
+      # Disable schema update to prevent older Admin from conflicting with newer DB schema
+      - FLOWABLE_DATABASE_SCHEMA_UPDATE=false
+      # Admin Default Login (admin/test)
+      - FLOWABLE_ADMIN_APP_ADMIN_USER-ID=admin
+      - FLOWABLE_ADMIN_APP_ADMIN_PASSWORD=test
+    ports:
+      - "9988:8080" # Maps Host 9988 -> Container 8080
+    networks:
+      - flowable-net
+
+volumes:
+  postgres_data:
+
+networks:
+  flowable-net:
