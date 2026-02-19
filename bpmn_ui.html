@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Flowable Real-Time BPMN Dashboard</title>
+    
+    <link rel="stylesheet" href="https://unpkg.com/bpmn-js@17.7.1/dist/assets/diagram-js.css" />
+    <link rel="stylesheet" href="https://unpkg.com/bpmn-js@17.7.1/dist/assets/bpmn-font/css/bpmn.css" />
+    
+    <style>
+        body, html {
+            margin: 0; padding: 0; height: 100%;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f8f9fa;
+        }
+        
+        /* The container for the BPMN canvas */
+        #canvas {
+            width: 100%;
+            height: 100vh;
+            background: white;
+            cursor: grab;
+        }
+        #canvas:active { cursor: grabbing; }
+
+        /* Custom styling to highlight active nodes (Green Border & Background) */
+        .highlight:not(.djs-connection) .djs-visual > :nth-child(1) {
+            stroke: #1b5e20 !important; 
+            stroke-width: 3px !important;
+            fill: #e8f5e9 !important;   
+        }
+
+        /* Camunda-style token count badge */
+        .token-badge {
+            background-color: #d32f2f;
+            color: white;
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            font-weight: bold;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+            transform: translate(-50%, -50%); /* Centers the badge on the corner */
+            pointer-events: none;
+        }
+
+        /* Floating Dashboard Controls */
+        #dashboard-controls {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            background: rgba(255, 255, 255, 0.95);
+            padding: 15px 25px;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            z-index: 1000;
+            min-width: 250px;
+            border: 1px solid #e0e0e0;
+        }
+        h2 { margin: 0 0 10px 0; font-size: 18px; color: #333; }
+        .status-row { margin-bottom: 8px; font-size: 14px; color: #555; }
+        
+        /* Connection Status Dot */
+        .status-indicator {
+            display: inline-block;
+            width: 10px; height: 10px;
+            border-radius: 50%;
+            background-color: orange;
+            margin-right: 5px;
+        }
+        .connected { background-color: #4caf50; }
+        .error { background-color: #f44336; }
+    </style>
+</head>
+<body>
+
+    <div id="dashboard-controls">
+        <h2>Flowable Live Monitor</h2>
+        <div class="status-row">
+            <span id="connection-status" class="status-indicator"></span>
+            <span id="status-text">Initializing...</span>
+        </div>
+        <div class="status-row">
+            <strong>Active Process Instances:</strong> <span id="process-count">0</span>
+        </div>
+    </div>
+
+    <div id="canvas"></div>
+
+    <script src="https://unpkg.com/bpmn-js@17.7.1/dist/bpmn-viewer.production.min.js"></script>
+
+    <script>
+        // ==========================================
+        // CONFIGURATION - UPDATE THESE VARIABLES
+        // ==========================================
+        
+        // Base URL to your Flowable REST API (Make sure CORS is enabled on your server!)
+        const FLOWABLE_URL = 'http://localhost:8080/flowable-rest/service'; 
+        
+        // Your Flowable REST credentials
+        const USERNAME = 'admin';  
+        const PASSWORD = 'test';   
+        
+        // Define which process to monitor using its KEY (found in your BPMN XML id parameter)
+        const PROCESS_DEFINITION_KEY = 'yourProcessKeyHere'; 
+        
+        // Polling interval
+        const UPDATE_INTERVAL_MS = 1000; // 1 second
+
+        // ==========================================
+        // INTERNAL GLOBALS
+        // ==========================================
+        let viewer;
+        let processDefinitionId = null;
+        let activeOverlayIds = [];
+        let activeMarkerIds = [];
+
+        // Helper to generate Basic Auth headers
+        function getHeaders() {
+            return {
+                'Authorization': 'Basic ' + btoa(USERNAME + ':' + PASSWORD),
+                'Accept': 'application/json'
+            };
+        }
+
+        // Update the UI status indicator
+        function setStatus(text, state) {
+            document.getElementById('status-text').textContent = text;
+            document.getElementById('connection-status').className = 'status-indicator ' + state;
+        }
+
+        // Step 1: Initialize the viewer and fetch the process definition
+        async function init() {
+            try {
+                viewer = new BpmnJS({ container: '#canvas' });
+                setStatus('Fetching Process Definition...', 'orange');
+
+                // 1a. Get the latest deployed process definition by key
+                const defRes = await fetch(`${FLOWABLE_URL}/repository/process-definitions?key=${PROCESS_DEFINITION_KEY}&latest=true`, {
+                    headers: getHeaders()
+                });
+
+                if (!defRes.ok) throw new Error(`HTTP ${defRes.status}: Unable to fetch process definitions.`);
+                const defData = await defRes.json();
+
+                if (defData.data && defData.data.length > 0) {
+                    processDefinitionId = defData.data[0].id;
+                    setStatus('Downloading BPMN Model...', 'orange');
+                    
+                    // 1b. Fetch the actual BPMN XML model resource
+                    const xmlRes = await fetch(`${FLOWABLE_URL}/repository/process-definitions/${processDefinitionId}/resourcedata`, {
+                        headers: getHeaders() 
+                    });
+                    
+                    if (!xmlRes.ok) throw new Error(`Could not fetch XML.`);
+                    const xml = await xmlRes.text();
+
+                    // 1c. Import the XML into the BPMN viewer
+                    await viewer.importXML(xml);
+                    viewer.get('canvas').zoom('fit-viewport');
+
+                    setStatus('Connected & Monitoring', 'connected');
+
+                    // 1d. Start the 1-second polling loop
+                    pollExecutions();
+                    setInterval(pollExecutions, UPDATE_INTERVAL_MS);
+
+                } else {
+                    throw new Error(`Process with key '${PROCESS_DEFINITION_KEY}' not found.`);
+                }
+
+            } catch (error) {
+                console.error("Initialization Error:", error);
+                setStatus('Error: ' + error.message, 'error');
+            }
+        }
+
+        // Step 2: Poll for active executions and update the diagram
+        async function pollExecutions() {
+            if (!processDefinitionId) return;
+
+            try {
+                // Fetch active executions for the current process definition
+                const execRes = await fetch(`${FLOWABLE_URL}/runtime/executions?processDefinitionId=${processDefinitionId}&size=1000`, {
+                    headers: getHeaders()
+                });
+
+                if (!execRes.ok) throw new Error(`HTTP ${execRes.status}`);
+                const execData = await execRes.json();
+                const executions = execData.data || [];
+                
+                const activityCounts = {};
+                let rootProcessInstances = new Set();
+
+                // Group token counts by their activity ID (the specific node they are waiting at)
+                executions.forEach(exec => {
+                    if (exec.processInstanceId) rootProcessInstances.add(exec.processInstanceId);
+                    
+                    // Ignore root executions (which represent the process itself, not a specific node)
+                    if (exec.activityId && exec.activityId !== 'null') {
+                        activityCounts[exec.activityId] = (activityCounts[exec.activityId] || 0) + 1;
+                    }
+                });
+
+                // Update UI Counter
+                document.getElementById('process-count').innerText = rootProcessInstances.size;
+
+                // Update the BPMN Canvas
+                updateHighlights(activityCounts);
+
+            } catch (error) {
+                console.error("Polling Error:", error);
+                setStatus('Connection Lost', 'error');
+            }
+        }
+
+        // Step 3: Draw the highlights and badges on the BPMN diagram
+        function updateHighlights(activityCounts) {
+            if (!viewer) return;
+
+            const canvas = viewer.get('canvas');
+            const overlays = viewer.get('overlays');
+
+            // 1. Remove old overlays and markers
+            activeOverlayIds.forEach(id => overlays.remove(id));
+            activeMarkerIds.forEach(id => canvas.removeMarker(id, 'highlight'));
+            activeOverlayIds = [];
+            activeMarkerIds = [];
+
+            // 2. Add new overlays and markers for current active nodes
+            for (const [activityId, count] of Object.entries(activityCounts)) {
+                try {
+                    // Highlight the node box/circle in green
+                    canvas.addMarker(activityId, 'highlight');
+                    activeMarkerIds.push(activityId);
+
+                    // Add the red numeric badge
+                    const overlayId = overlays.add(activityId, {
+                        position: { bottom: 0, right: 0 },
+                        html: `<div class="token-badge" title="${count} token(s) waiting">${count}</div>`
+                    });
+                    activeOverlayIds.push(overlayId);
+                } catch (e) {
+                    console.warn(`Could not add highlight to element ID: ${activityId}.`);
+                }
+            }
+        }
+
+        // Start the application when the page loads
+        document.addEventListener('DOMContentLoaded', init);
+    </script>
+</body>
+</html>
