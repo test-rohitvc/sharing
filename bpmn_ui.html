@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Flowable Real-Time BPMN Dashboard</title>
+    <title>Flowable Live Dashboard</title>
     
     <link rel="stylesheet" href="https://unpkg.com/bpmn-js@17.7.1/dist/assets/diagram-js.css" />
     <link rel="stylesheet" href="https://unpkg.com/bpmn-js@17.7.1/dist/assets/bpmn-font/css/bpmn.css" />
@@ -15,62 +15,44 @@
             background-color: #f8f9fa;
         }
         
-        /* The container for the BPMN canvas */
         #canvas {
-            width: 100%;
-            height: 100vh;
-            background: white;
-            cursor: grab;
+            width: 100%; height: 100vh;
+            background: white; cursor: grab;
         }
         #canvas:active { cursor: grabbing; }
 
-        /* Custom styling to highlight active nodes (Green Border & Background) */
+        /* Highlight active nodes (Green) */
         .highlight:not(.djs-connection) .djs-visual > :nth-child(1) {
             stroke: #1b5e20 !important; 
             stroke-width: 3px !important;
             fill: #e8f5e9 !important;   
         }
 
-        /* Camunda-style token count badge */
+        /* Red token count badge */
         .token-badge {
-            background-color: #d32f2f;
-            color: white;
-            border-radius: 50%;
-            width: 24px;
-            height: 24px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 12px;
-            font-weight: bold;
+            background-color: #d32f2f; color: white;
+            border-radius: 50%; width: 24px; height: 24px;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 12px; font-weight: bold;
             box-shadow: 0 2px 4px rgba(0,0,0,0.3);
-            transform: translate(-50%, -50%); /* Centers the badge on the corner */
+            transform: translate(-50%, -50%);
             pointer-events: none;
         }
 
-        /* Floating Dashboard Controls */
+        /* Dashboard Panel */
         #dashboard-controls {
-            position: absolute;
-            top: 20px;
-            left: 20px;
+            position: absolute; top: 20px; left: 20px;
             background: rgba(255, 255, 255, 0.95);
-            padding: 15px 25px;
-            border-radius: 8px;
+            padding: 15px 25px; border-radius: 8px;
             box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-            z-index: 1000;
-            min-width: 250px;
-            border: 1px solid #e0e0e0;
+            z-index: 1000; min-width: 250px; border: 1px solid #e0e0e0;
         }
         h2 { margin: 0 0 10px 0; font-size: 18px; color: #333; }
         .status-row { margin-bottom: 8px; font-size: 14px; color: #555; }
         
-        /* Connection Status Dot */
         .status-indicator {
-            display: inline-block;
-            width: 10px; height: 10px;
-            border-radius: 50%;
-            background-color: orange;
-            margin-right: 5px;
+            display: inline-block; width: 10px; height: 10px;
+            border-radius: 50%; background-color: orange; margin-right: 5px;
         }
         .connected { background-color: #4caf50; }
         .error { background-color: #f44336; }
@@ -85,7 +67,7 @@
             <span id="status-text">Initializing...</span>
         </div>
         <div class="status-row">
-            <strong>Active Process Instances:</strong> <span id="process-count">0</span>
+            <strong>Active Instances:</strong> <span id="process-count">0</span>
         </div>
     </div>
 
@@ -95,85 +77,97 @@
 
     <script>
         // ==========================================
-        // CONFIGURATION - UPDATE THESE VARIABLES
+        // CONFIGURATION 
         // ==========================================
         
-        // Updated URL routing through the Docker cors-proxy
-        const FLOWABLE_URL = 'http://10.0.1.90:8081/http://flowable-rest:8080/flowable-rest/service'; 
+        // 1. Your Proxy URL (with trailing slash)
+        const PROXY_URL = 'http://10.0.1.90:8081/';
         
-        // Your Flowable REST credentials
-        const USERNAME = 'admin';  // Replace with actual username
-        const PASSWORD = 'test';   // Replace with actual password
+        // 2. The Internal Flowable Server URL (no trailing slash)
+        const FLOWABLE_URL = 'http://flowable-rest:8080/flowable-rest/service'; 
         
-        // Define which process to monitor using its KEY
-        const PROCESS_DEFINITION_KEY = 'yourProcessKeyHere'; 
+        // 3. Credentials
+        const USERNAME = 'admin';  
+        const PASSWORD = 'test';   
         
-        // Polling interval
-        const UPDATE_INTERVAL_MS = 1000; // 1 second
+        // 4. THE DEPLOYMENT ID (Paste the ID you get when deploying the BPMN)
+        const DEPLOYMENT_ID = 'your_deployment_id_here'; 
+        
+        const UPDATE_INTERVAL_MS = 1000; 
 
         // ==========================================
-        // INTERNAL GLOBALS
+        // GLOBALS
         // ==========================================
         let viewer;
         let processDefinitionId = null;
         let activeOverlayIds = [];
         let activeMarkerIds = [];
 
-        // Helper to generate Basic Auth & Proxy headers
-        function getHeaders() {
+        // Headers for JSON API requests
+        function getJsonHeaders() {
             return {
                 'Authorization': 'Basic ' + btoa(USERNAME + ':' + PASSWORD),
                 'Accept': 'application/json',
-                // Required by the cors-anywhere proxy container to allow the request
                 'X-Requested-With': 'XMLHttpRequest' 
             };
         }
 
-        // Update the UI status indicator
+        // Headers for downloading the raw BPMN XML
+        function getXmlHeaders() {
+            return {
+                'Authorization': 'Basic ' + btoa(USERNAME + ':' + PASSWORD),
+                'X-Requested-With': 'XMLHttpRequest' 
+            };
+        }
+
         function setStatus(text, state) {
             document.getElementById('status-text').textContent = text;
             document.getElementById('connection-status').className = 'status-indicator ' + state;
         }
 
-        // Step 1: Initialize the viewer and fetch the process definition
+        // Combine Proxy and Base URL securely
+        function buildUrl(endpoint) {
+            return PROXY_URL + FLOWABLE_URL + endpoint;
+        }
+
         async function init() {
             try {
                 viewer = new BpmnJS({ container: '#canvas' });
-                setStatus('Fetching Process Definition...', 'orange');
+                setStatus('Locating Process Definition...', 'orange');
 
-                // 1a. Get the latest deployed process definition by key
-                const defRes = await fetch(`${FLOWABLE_URL}/repository/process-definitions?key=${PROCESS_DEFINITION_KEY}&latest=true`, {
-                    headers: getHeaders()
+                // STEP 1: Find the Process Definition tied to the Deployment ID
+                const defRes = await fetch(buildUrl(`/repository/process-definitions?deploymentId=${DEPLOYMENT_ID}`), {
+                    headers: getJsonHeaders()
                 });
 
-                if (!defRes.ok) throw new Error(`HTTP ${defRes.status}: Unable to fetch process definitions.`);
+                if (!defRes.ok) throw new Error(`Failed to map Deployment ID to Process Definition.`);
                 const defData = await defRes.json();
 
-                if (defData.data && defData.data.length > 0) {
-                    processDefinitionId = defData.data[0].id;
-                    setStatus('Downloading BPMN Model...', 'orange');
-                    
-                    // 1b. Fetch the actual BPMN XML model resource
-                    const xmlRes = await fetch(`${FLOWABLE_URL}/repository/process-definitions/${processDefinitionId}/resourcedata`, {
-                        headers: getHeaders() 
-                    });
-                    
-                    if (!xmlRes.ok) throw new Error(`Could not fetch XML.`);
-                    const xml = await xmlRes.text();
-
-                    // 1c. Import the XML into the BPMN viewer
-                    await viewer.importXML(xml);
-                    viewer.get('canvas').zoom('fit-viewport');
-
-                    setStatus('Connected & Monitoring', 'connected');
-
-                    // 1d. Start the 1-second polling loop
-                    pollExecutions();
-                    setInterval(pollExecutions, UPDATE_INTERVAL_MS);
-
-                } else {
-                    throw new Error(`Process with key '${PROCESS_DEFINITION_KEY}' not found.`);
+                if (!defData.data || defData.data.length === 0) {
+                    throw new Error(`No process definition found for deployment ID: ${DEPLOYMENT_ID}`);
                 }
+
+                // Grab the process definition ID generated by this specific deployment
+                processDefinitionId = defData.data[0].id;
+                setStatus('Downloading BPMN Model...', 'orange');
+                
+                // STEP 2: Fetch the actual BPMN XML model using the Process Definition ID
+                const xmlRes = await fetch(buildUrl(`/repository/process-definitions/${processDefinitionId}/resourcedata`), {
+                    headers: getXmlHeaders() 
+                });
+                
+                if (!xmlRes.ok) throw new Error(`Could not download BPMN XML.`);
+                const xml = await xmlRes.text();
+
+                // Load diagram into Viewer
+                await viewer.importXML(xml);
+                viewer.get('canvas').zoom('fit-viewport');
+
+                setStatus('Connected & Monitoring', 'connected');
+
+                // STEP 3: Start polling executions
+                pollExecutions();
+                setInterval(pollExecutions, UPDATE_INTERVAL_MS);
 
             } catch (error) {
                 console.error("Initialization Error:", error);
@@ -181,37 +175,31 @@
             }
         }
 
-        // Step 2: Poll for active executions and update the diagram
         async function pollExecutions() {
             if (!processDefinitionId) return;
 
             try {
-                // Fetch active executions for the current process definition
-                const execRes = await fetch(`${FLOWABLE_URL}/runtime/executions?processDefinitionId=${processDefinitionId}&size=1000`, {
-                    headers: getHeaders()
+                // Poll active executions for THIS specific process definition
+                const execRes = await fetch(buildUrl(`/runtime/executions?processDefinitionId=${processDefinitionId}&size=1000`), {
+                    headers: getJsonHeaders()
                 });
 
-                if (!execRes.ok) throw new Error(`HTTP ${execRes.status}`);
+                if (!execRes.ok) throw new Error(`Polling failed: HTTP ${execRes.status}`);
                 const execData = await execRes.json();
                 const executions = execData.data || [];
                 
                 const activityCounts = {};
                 let rootProcessInstances = new Set();
 
-                // Group token counts by their activity ID (the specific node they are waiting at)
                 executions.forEach(exec => {
                     if (exec.processInstanceId) rootProcessInstances.add(exec.processInstanceId);
                     
-                    // Ignore root executions (which represent the process itself, not a specific node)
                     if (exec.activityId && exec.activityId !== 'null') {
                         activityCounts[exec.activityId] = (activityCounts[exec.activityId] || 0) + 1;
                     }
                 });
 
-                // Update UI Counter
                 document.getElementById('process-count').innerText = rootProcessInstances.size;
-
-                // Update the BPMN Canvas
                 updateHighlights(activityCounts);
 
             } catch (error) {
@@ -220,27 +208,24 @@
             }
         }
 
-        // Step 3: Draw the highlights and badges on the BPMN diagram
         function updateHighlights(activityCounts) {
             if (!viewer) return;
 
             const canvas = viewer.get('canvas');
             const overlays = viewer.get('overlays');
 
-            // 1. Remove old overlays and markers
+            // Clear old visuals
             activeOverlayIds.forEach(id => overlays.remove(id));
             activeMarkerIds.forEach(id => canvas.removeMarker(id, 'highlight'));
             activeOverlayIds = [];
             activeMarkerIds = [];
 
-            // 2. Add new overlays and markers for current active nodes
+            // Draw new visuals
             for (const [activityId, count] of Object.entries(activityCounts)) {
                 try {
-                    // Highlight the node box/circle in green
                     canvas.addMarker(activityId, 'highlight');
                     activeMarkerIds.push(activityId);
 
-                    // Add the red numeric badge
                     const overlayId = overlays.add(activityId, {
                         position: { bottom: 0, right: 0 },
                         html: `<div class="token-badge" title="${count} token(s) waiting">${count}</div>`
@@ -252,7 +237,6 @@
             }
         }
 
-        // Start the application when the page loads
         document.addEventListener('DOMContentLoaded', init);
     </script>
 </body>
