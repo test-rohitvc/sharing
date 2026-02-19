@@ -98,14 +98,14 @@
         // CONFIGURATION - UPDATE THESE VARIABLES
         // ==========================================
         
-        // Base URL to your Flowable REST API (Make sure CORS is enabled on your server!)
-        const FLOWABLE_URL = 'http://localhost:8080/flowable-rest/service'; 
+        // Updated URL routing through the Docker cors-proxy
+        const FLOWABLE_URL = 'http://10.0.1.90:8081/http://flowable-rest:8080/flowable-rest/service'; 
         
         // Your Flowable REST credentials
-        const USERNAME = 'admin';  
-        const PASSWORD = 'test';   
+        const USERNAME = 'admin';  // Replace with actual username
+        const PASSWORD = 'test';   // Replace with actual password
         
-        // Define which process to monitor using its KEY (found in your BPMN XML id parameter)
+        // Define which process to monitor using its KEY
         const PROCESS_DEFINITION_KEY = 'yourProcessKeyHere'; 
         
         // Polling interval
@@ -119,11 +119,13 @@
         let activeOverlayIds = [];
         let activeMarkerIds = [];
 
-        // Helper to generate Basic Auth headers
+        // Helper to generate Basic Auth & Proxy headers
         function getHeaders() {
             return {
                 'Authorization': 'Basic ' + btoa(USERNAME + ':' + PASSWORD),
-                'Accept': 'application/json'
+                'Accept': 'application/json',
+                // Required by the cors-anywhere proxy container to allow the request
+                'X-Requested-With': 'XMLHttpRequest' 
             };
         }
 
