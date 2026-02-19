@@ -1,0 +1,16 @@
+version: '3.8'
+services:
+  flowable-rest:
+    image: flowable/flowable-rest:latest
+    # Keep your existing env vars and setup here
+    # Just make sure this service isn't exposing ports directly to the web
+
+  # The Simple Wildcard Proxy
+  cors-proxy:
+    image: imdjh/cors-anywhere:latest
+    environment:
+      - CORSANYWHERE_REQUIREHEADER=origin,x-requested-with # Allows standard browser fetch
+    ports:
+      - "8080:8080" # Point your JS to this port
+    depends_on:
+      - flowable-rest
