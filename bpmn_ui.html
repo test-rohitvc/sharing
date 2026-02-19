@@ -43,28 +43,47 @@
         #dashboard-controls {
             position: absolute; top: 20px; left: 20px;
             background: rgba(255, 255, 255, 0.95);
-            padding: 15px 25px; border-radius: 8px;
+            padding: 20px; border-radius: 8px;
             box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-            z-index: 1000; min-width: 250px; border: 1px solid #e0e0e0;
+            z-index: 1000; min-width: 280px; border: 1px solid #e0e0e0;
         }
-        h2 { margin: 0 0 10px 0; font-size: 18px; color: #333; }
-        .status-row { margin-bottom: 8px; font-size: 14px; color: #555; }
+        h2 { margin: 0 0 15px 0; font-size: 18px; color: #333; }
+        .status-row { margin-bottom: 12px; font-size: 14px; color: #555; }
         
         .status-indicator {
             display: inline-block; width: 10px; height: 10px;
-            border-radius: 50%; background-color: orange; margin-right: 5px;
+            border-radius: 50%; background-color: #ccc; margin-right: 5px;
         }
         .connected { background-color: #4caf50; }
+        .orange { background-color: orange; }
         .error { background-color: #f44336; }
+
+        /* Input Controls */
+        .input-group { display: flex; gap: 8px; margin-bottom: 15px; }
+        input[type="text"] {
+            flex: 1; padding: 6px 10px; border: 1px solid #ccc;
+            border-radius: 4px; font-size: 14px;
+        }
+        button {
+            padding: 6px 12px; background: #0056b3; color: white;
+            border: none; border-radius: 4px; cursor: pointer; font-size: 14px;
+        }
+        button:hover { background: #004494; }
     </style>
 </head>
 <body>
 
     <div id="dashboard-controls">
         <h2>Flowable Live Monitor</h2>
+        
+        <div class="input-group">
+            <input type="text" id="deployment-id-input" placeholder="Enter Deployment ID..." />
+            <button onclick="startMonitoring()">Load</button>
+        </div>
+
         <div class="status-row">
             <span id="connection-status" class="status-indicator"></span>
-            <span id="status-text">Initializing...</span>
+            <span id="status-text">Waiting for Deployment ID...</span>
         </div>
         <div class="status-row">
             <strong>Active Instances:</strong> <span id="process-count">0</span>
@@ -77,33 +96,31 @@
 
     <script>
         // ==========================================
-        // CONFIGURATION 
+        // SERVER CONFIGURATION 
         // ==========================================
         
-        // 1. Your Proxy URL (with trailing slash)
+        // The Proxy Container URL
         const PROXY_URL = 'http://10.0.1.90:8081/';
         
-        // 2. The Internal Flowable Server URL (no trailing slash)
-        const FLOWABLE_URL = 'http://flowable-rest:8080/flowable-rest/service'; 
+        // Your explicit Flowable IP and Port to bypass Docker DNS confusion
+        const FLOWABLE_BASE = 'http://10.0.1.90:6054/flowable-rest/service'; 
         
-        // 3. Credentials
+        // Credentials
         const USERNAME = 'admin';  
         const PASSWORD = 'test';   
-        
-        // 4. THE DEPLOYMENT ID (Paste the ID you get when deploying the BPMN)
-        const DEPLOYMENT_ID = 'your_deployment_id_here'; 
         
         const UPDATE_INTERVAL_MS = 1000; 
 
         // ==========================================
         // GLOBALS
         // ==========================================
-        let viewer;
+        let viewer = new BpmnJS({ container: '#canvas' });
         let processDefinitionId = null;
         let activeOverlayIds = [];
         let activeMarkerIds = [];
+        let pollTimer = null;
 
-        // Headers for JSON API requests
+        // Headers for JSON endpoints
         function getJsonHeaders() {
             return {
                 'Authorization': 'Basic ' + btoa(USERNAME + ':' + PASSWORD),
@@ -112,7 +129,7 @@
             };
         }
 
-        // Headers for downloading the raw BPMN XML
+        // Headers for raw XML download
         function getXmlHeaders() {
             return {
                 'Authorization': 'Basic ' + btoa(USERNAME + ':' + PASSWORD),
@@ -125,52 +142,65 @@
             document.getElementById('connection-status').className = 'status-indicator ' + state;
         }
 
-        // Combine Proxy and Base URL securely
+        // Safely construct the proxy URL
         function buildUrl(endpoint) {
-            return PROXY_URL + FLOWABLE_URL + endpoint;
+            const finalUrl = PROXY_URL + FLOWABLE_BASE + endpoint;
+            console.log("Fetching ->", finalUrl); // Helps debug 404s
+            return finalUrl;
         }
 
-        async function init() {
-            try {
-                viewer = new BpmnJS({ container: '#canvas' });
-                setStatus('Locating Process Definition...', 'orange');
+        // Triggered when you click "Load"
+        async function startMonitoring() {
+            const deploymentId = document.getElementById('deployment-id-input').value.trim();
+            if (!deploymentId) {
+                alert("Please enter a valid Deployment ID.");
+                return;
+            }
 
-                // STEP 1: Find the Process Definition tied to the Deployment ID
-                const defRes = await fetch(buildUrl(`/repository/process-definitions?deploymentId=${DEPLOYMENT_ID}`), {
+            // Reset state
+            if (pollTimer) clearInterval(pollTimer);
+            viewer.clear();
+            document.getElementById('process-count').innerText = "0";
+
+            try {
+                setStatus('Mapping ID...', 'orange');
+
+                // STEP 1: Find Process Definition by Deployment ID
+                const defRes = await fetch(buildUrl(`/repository/process-definitions?deploymentId=${deploymentId}`), {
                     headers: getJsonHeaders()
                 });
 
-                if (!defRes.ok) throw new Error(`Failed to map Deployment ID to Process Definition.`);
+                if (!defRes.ok) throw new Error(`HTTP ${defRes.status}: Cannot map Deployment ID`);
                 const defData = await defRes.json();
 
                 if (!defData.data || defData.data.length === 0) {
-                    throw new Error(`No process definition found for deployment ID: ${DEPLOYMENT_ID}`);
+                    throw new Error(`No definition linked to deployment: ${deploymentId}`);
                 }
 
-                // Grab the process definition ID generated by this specific deployment
                 processDefinitionId = defData.data[0].id;
-                setStatus('Downloading BPMN Model...', 'orange');
+                console.log("Found Process Definition ID:", processDefinitionId);
+                setStatus('Downloading Model...', 'orange');
                 
-                // STEP 2: Fetch the actual BPMN XML model using the Process Definition ID
+                // STEP 2: Fetch the actual BPMN XML
                 const xmlRes = await fetch(buildUrl(`/repository/process-definitions/${processDefinitionId}/resourcedata`), {
                     headers: getXmlHeaders() 
                 });
                 
-                if (!xmlRes.ok) throw new Error(`Could not download BPMN XML.`);
+                if (!xmlRes.ok) throw new Error(`HTTP ${xmlRes.status}: Cannot download BPMN XML`);
                 const xml = await xmlRes.text();
 
                 // Load diagram into Viewer
                 await viewer.importXML(xml);
                 viewer.get('canvas').zoom('fit-viewport');
 
-                setStatus('Connected & Monitoring', 'connected');
+                setStatus('Monitoring', 'connected');
 
                 // STEP 3: Start polling executions
                 pollExecutions();
-                setInterval(pollExecutions, UPDATE_INTERVAL_MS);
+                pollTimer = setInterval(pollExecutions, UPDATE_INTERVAL_MS);
 
             } catch (error) {
-                console.error("Initialization Error:", error);
+                console.error("Setup Error:", error);
                 setStatus('Error: ' + error.message, 'error');
             }
         }
@@ -179,12 +209,12 @@
             if (!processDefinitionId) return;
 
             try {
-                // Poll active executions for THIS specific process definition
+                // Poll active nodes for this specific definition
                 const execRes = await fetch(buildUrl(`/runtime/executions?processDefinitionId=${processDefinitionId}&size=1000`), {
                     headers: getJsonHeaders()
                 });
 
-                if (!execRes.ok) throw new Error(`Polling failed: HTTP ${execRes.status}`);
+                if (!execRes.ok) throw new Error(`Polling HTTP ${execRes.status}`);
                 const execData = await execRes.json();
                 const executions = execData.data || [];
                 
@@ -210,17 +240,16 @@
 
         function updateHighlights(activityCounts) {
             if (!viewer) return;
-
             const canvas = viewer.get('canvas');
             const overlays = viewer.get('overlays');
 
-            // Clear old visuals
+            // Clear old overlays
             activeOverlayIds.forEach(id => overlays.remove(id));
             activeMarkerIds.forEach(id => canvas.removeMarker(id, 'highlight'));
             activeOverlayIds = [];
             activeMarkerIds = [];
 
-            // Draw new visuals
+            // Draw new overlays
             for (const [activityId, count] of Object.entries(activityCounts)) {
                 try {
                     canvas.addMarker(activityId, 'highlight');
@@ -232,12 +261,10 @@
                     });
                     activeOverlayIds.push(overlayId);
                 } catch (e) {
-                    console.warn(`Could not add highlight to element ID: ${activityId}.`);
+                    // Ignore elements that don't support highlights (like intermediate sequence flows)
                 }
             }
         }
-
-        document.addEventListener('DOMContentLoaded', init);
     </script>
 </body>
 </html>
