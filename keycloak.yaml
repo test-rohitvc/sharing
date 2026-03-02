@@ -1,0 +1,47 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: keycloak-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: keycloak
+      POSTGRES_USER: keycloak
+      POSTGRES_PASSWORD: super_secure_db_password # ⚠️ CHANGE THIS
+    volumes:
+      - keycloak_postgres_data:/var/lib/postgresql/data
+    networks:
+      - keycloak_network
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:24.0.2 # Pinned version for stability
+    container_name: keycloak-server
+    command: start
+    restart: unless-stopped
+    environment:
+      # Database Connection
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://postgres:5432/keycloak
+      KC_DB_USERNAME: keycloak
+      KC_DB_PASSWORD: super_secure_db_password # ⚠️ MUST MATCH POSTGRES_PASSWORD
+      
+      # Initial Admin Credentials
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: super_secure_admin_password # ⚠️ CHANGE THIS
+      
+      # Dokploy / Reverse Proxy Settings
+      KC_PROXY: edge
+      KC_HOSTNAME: auth.yourdomain.com # ⚠️ CHANGE THIS to your actual Dokploy domain
+      KC_HOSTNAME_STRICT: "false" # Prevents startup crashes if the domain isn't fully propagated yet
+      
+    ports:
+      - "8080:8080"
+    depends_on:
+      - postgres
+    networks:
+      - keycloak_network
+
+volumes:
+  keycloak_postgres_data:
+
+networks:
+  keycloak_network:
