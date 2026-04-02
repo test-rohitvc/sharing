@@ -1,0 +1,35 @@
+# Use a lightweight Python base image
+FROM python:3.12-slim
+
+# Prevent Python from writing pyc files and keep stdout unbuffered
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+
+# Copy the uv binary from the official Astral image
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
+
+# Set the working directory
+WORKDIR /app
+
+# Copy dependency files first to leverage Docker layer caching
+COPY pyproject.toml uv.lock ./
+
+# Install dependencies into a virtual environment using uv
+# --frozen ensures we use the exact versions in uv.lock
+# --no-dev excludes development dependencies
+RUN uv sync --frozen --no-dev
+
+# Copy the rest of the application code
+COPY . .
+
+# Expose the port your app will run on
+EXPOSE 8000
+
+# Define volumes for persistent data (Dokploy will mount over these)
+VOLUME ["/app/uploads", "/app/cache"]
+
+# Add the virtual environment to the PATH
+ENV PATH="/app/.venv/bin:$PATH"
+
+# Run the application directly avoiding wrapper scripts
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
