@@ -1,0 +1,34 @@
+version: '3.8'
+
+services:
+  book-reader:
+    build: .
+    container_name: book-reader
+    expose:
+      - "8000"
+    restart: unless-stopped
+    networks:
+      - dokploy-network
+      
+    # THE FIX: Explicitly inject variables from Dokploy into the container
+    environment:
+      - type=${type}
+      - project_id=${project_id}
+      - private_key_id=${private_key_id}
+      - private_key=${private_key}
+      - client_email=${client_email}
+      - client_id=${client_id}
+      - auth_uri=${auth_uri}
+      - token_uri=${token_uri}
+      - auth_provider_x509_cert_url=${auth_provider_x509_cert_url}
+      - client_x509_cert_url=${client_x509_cert_url}
+      - universe_domain=${universe_domain}
+
+    volumes:
+      - /project/data:/app/data
+      - /project/uploads:/app/uploads
+      - /project/cache:/app/cache
+
+networks:
+  dokploy-network:
+    external: true
