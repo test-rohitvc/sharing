@@ -1,0 +1,10 @@
+email-bot:
+    image: my-email-bot:latest
+    restart: unless-stopped
+    environment:
+      - TRIGGER_EMAIL=trigger@bmo.in
+      - TRIGGER_PASSWORD=your_secure_password
+      - WEBHOOK_URL=http://your-external-task-ip/webhook-endpoint
+      - MAIL_SERVER=10.0.1.90
+    depends_on:
+      - mailserver # Assuming your poste.io service is named 'mailserver'
