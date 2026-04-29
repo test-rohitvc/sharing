@@ -1,0 +1,21 @@
+version: '3.8'
+
+services:
+  mailserver:
+    image: analogic/poste.io:latest
+    restart: unless-stopped
+    ports:
+      - "80:80"     # Web Admin and Webmail UI
+      - "25:25"     # Internal SMTP routing
+      - "143:143"   # IMAP
+      - "587:587"   # Message Submission
+    environment:
+      - TZ=Asia/Kolkata
+      - HTTPS=OFF # Crucial: Disables forced SSL so you can access it via raw IP
+      - DISABLE_CLAMAV=TRUE 
+      - DISABLE_RSPAMD=TRUE 
+    volumes:
+      - mail_data:/data
+
+volumes:
+  mail_data:
