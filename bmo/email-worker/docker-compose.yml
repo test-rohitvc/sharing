@@ -1,0 +1,14 @@
+version: '3.8'
+
+services:
+
+  producer:
+    build: .
+    container_name: email_producer
+    command: python producer.py
+    env_file:
+      - .env
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    restart: unless-stopped
