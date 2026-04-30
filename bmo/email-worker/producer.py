@@ -123,6 +123,9 @@ def check_inbox():
                     kwargs={"email_payload": payload}
                 )
                 print(f"Task pushed to queue successfully. Task ID: {result.id} | Subject: {subject}")
+
+                mail.store(num, '+FLAGS', '\\Seen')
+                print("Email marked as SEEN.")
             except Exception as e:
                 print(f"Failed to push task to RabbitMQ: {e}")
 
