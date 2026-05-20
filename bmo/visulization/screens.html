@@ -1,0 +1,1257 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full bg-slate-50/50">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BMO Bank - Loan Prebooking Portal</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap');
+        body {
+            font-family: 'Plus Jakarta Sans', sans-serif;
+        }
+        .font-code {
+            font-family: 'JetBrains Mono', monospace;
+        }
+        /* BMO Brand Accents */
+        .bmo-blue-brand { background-color: #005A9C; }
+        .bmo-blue-text { color: #005A9C; }
+        .bmo-red-brand { background-color: #ED1C24; }
+        .bmo-red-text { color: #ED1C24; }
+        .shadow-soft {
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.02);
+        }
+        .shadow-premium {
+            box-shadow: 0 12px 35px -8px rgba(0, 90, 156, 0.08);
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(4px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .animate-fade-in {
+            animation: fadeIn 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        }
+    </style>
+</head>
+<body class="h-full flex flex-col overflow-hidden antialiased text-slate-800">
+
+    <!-- HEADER -->
+    <header class="bg-white border-b border-slate-100 h-14 flex items-center justify-between px-4 lg:px-6 shrink-0 z-30">
+        <div class="flex items-center space-x-3">
+            <!-- Mobile Menu Trigger -->
+            <button onclick="toggleMobileSidebar()" class="lg:hidden p-1.5 rounded-lg hover:bg-slate-50 text-slate-500 transition">
+                <i data-lucide="menu" class="w-5 h-5"></i>
+            </button>
+            <div class="bmo-blue-brand text-white font-extrabold px-3 py-1 rounded-lg text-xs tracking-widest shadow-sm">BMO</div>
+            <span class="text-slate-200 hidden sm:inline">/</span>
+            <span class="text-[11px] font-bold tracking-wider text-slate-500 uppercase hidden sm:inline">Commercial Operations</span>
+        </div>
+        
+        <div class="flex items-center space-x-4 lg:space-x-6">
+            <button onclick="resetData()" class="text-[11px] font-bold text-slate-400 hover:text-slate-600 transition flex items-center gap-1.5">
+                <i data-lucide="rotate-ccw" class="w-3.5 h-3.5"></i> Reset Data
+            </button>
+            <div class="h-4 w-px bg-slate-200"></div>
+            <div class="flex items-center space-x-3">
+                <div class="w-8 h-8 rounded-xl bg-slate-50 flex items-center justify-center border border-slate-100 shadow-sm">
+                    <i data-lucide="shield-check" class="w-4 h-4 bmo-blue-text"></i>
+                </div>
+                <div class="text-left hidden xs:block">
+                    <span class="block text-[11px] font-bold text-slate-700 leading-none">Operations Desk</span>
+                    <span class="block text-[9px] text-slate-400 mt-0.5">Level 2 Authorizer</span>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <div class="flex flex-1 overflow-hidden relative">
+        
+        <!-- SIDEBAR - DESKTOP -->
+        <aside id="sidebar-desktop" class="w-60 bg-white border-r border-slate-100 flex-col justify-between shrink-0 z-20 hidden lg:flex">
+            <div class="p-4 space-y-1.5">
+                <div class="px-3 mb-3 text-[9px] font-extrabold text-slate-400 uppercase tracking-widest">Navigation</div>
+                
+                <button onclick="switchScreen('dashboard')" id="nav-dashboard" class="w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-semibold transition duration-200 text-slate-600 hover:bg-slate-50">
+                    <span class="flex items-center gap-3">
+                        <i data-lucide="layout-grid" class="w-4 h-4"></i> Metric Dashboard
+                    </span>
+                </button>
+
+                <button onclick="switchScreen('scrutiny')" id="nav-scrutiny" class="w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-semibold transition duration-200 text-slate-600 hover:bg-slate-50">
+                    <span class="flex items-center gap-3">
+                        <i data-lucide="search" class="w-4 h-4"></i> Scrutiny Center
+                    </span>
+                </button>
+
+                <button onclick="switchScreen('hitl')" id="nav-hitl" class="w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-semibold transition duration-200 text-slate-600 hover:bg-slate-50">
+                    <span class="flex items-center gap-3">
+                        <i data-lucide="fingerprint" class="w-4 h-4"></i> HITL Approvals
+                    </span>
+                    <span id="hitl-badge-total" class="bg-red-50 text-red-600 text-[10px] px-2 py-0.5 rounded-md font-bold border border-red-100">0</span>
+                </button>
+            </div>
+            
+            <div class="p-4 m-4 rounded-xl bg-slate-50 border border-slate-100">
+                <div class="flex items-center gap-2">
+                    <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                    <span class="text-[10px] font-bold text-slate-600 uppercase tracking-wider">Live System</span>
+                </div>
+                <p class="text-[9px] text-slate-400 mt-1 leading-relaxed">Pipeline extraction engines and models are active.</p>
+            </div>
+        </aside>
+
+        <!-- SIDEBAR - MOBILE DRAWER -->
+        <div id="sidebar-mobile-backdrop" onclick="toggleMobileSidebar()" class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-40 hidden lg:hidden"></div>
+        <aside id="sidebar-mobile" class="fixed inset-y-0 left-0 w-64 bg-white z-50 transform -translate-x-full transition-transform duration-200 ease-in-out flex flex-col justify-between lg:hidden shadow-xl">
+            <div class="p-4 space-y-1.5">
+                <div class="flex items-center justify-between px-3 mb-4">
+                    <span class="text-[10px] font-extrabold text-slate-400 uppercase tracking-widest">Navigation</span>
+                    <button onclick="toggleMobileSidebar()" class="text-slate-400 hover:text-slate-600"><i data-lucide="x" class="w-4 h-4"></i></button>
+                </div>
+                
+                <button onclick="switchScreen('dashboard'); toggleMobileSidebar()" id="mob-nav-dashboard" class="w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-semibold transition duration-200 text-slate-600">
+                    <span class="flex items-center gap-3">
+                        <i data-lucide="layout-grid" class="w-4 h-4"></i> Metric Dashboard
+                    </span>
+                </button>
+
+                <button onclick="switchScreen('scrutiny'); toggleMobileSidebar()" id="mob-nav-scrutiny" class="w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-semibold transition duration-200 text-slate-600">
+                    <span class="flex items-center gap-3">
+                        <i data-lucide="search" class="w-4 h-4"></i> Scrutiny Center
+                    </span>
+                </button>
+
+                <button onclick="switchScreen('hitl'); toggleMobileSidebar()" id="mob-nav-hitl" class="w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-semibold transition duration-200 text-slate-600">
+                    <span class="flex items-center gap-3">
+                        <i data-lucide="fingerprint" class="w-4 h-4"></i> HITL Approvals
+                    </span>
+                    <span id="hitl-badge-mobile" class="bg-red-50 text-red-600 text-[10px] px-2 py-0.5 rounded-md font-bold border border-red-100">0</span>
+                </button>
+            </div>
+            
+            <div class="p-4 m-4 rounded-xl bg-slate-50 border border-slate-100">
+                <div class="flex items-center gap-2">
+                    <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                    <span class="text-[10px] font-bold text-slate-600 uppercase tracking-wider">Live System</span>
+                </div>
+            </div>
+        </aside>
+
+        <!-- MAIN CORE VIEWPORT -->
+        <main class="flex-1 overflow-y-auto p-4 lg:p-6 relative bg-slate-50/50">
+
+            <!-- SCREEN 1: METRIC DASHBOARD -->
+            <section id="screen-dashboard" class="space-y-6 screen-view hidden animate-fade-in max-w-7xl mx-auto">
+                <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                    <div>
+                        <h1 class="text-xl lg:text-2xl font-bold text-slate-900 tracking-tight">Prebooking Metrics</h1>
+                        <p class="text-xs text-slate-400 mt-0.5">Real-time loan metadata extraction pipelines and exception processing monitoring.</p>
+                    </div>
+                </div>
+
+                <!-- KPI Cards -->
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 lg:gap-6">
+                    <div class="bg-white p-5 rounded-2xl border border-slate-100 shadow-soft relative overflow-hidden">
+                        <div class="flex justify-between items-start">
+                            <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">In Queue</span>
+                            <div class="p-2 rounded-lg bg-indigo-50 text-indigo-500"><i data-lucide="hourglass" class="w-3.5 h-3.5"></i></div>
+                        </div>
+                        <div class="text-2xl font-extrabold text-slate-900 mt-2" id="metric-in-queue">0</div>
+                        <p class="text-[9px] text-slate-400 mt-1">Intake documents waiting for extraction</p>
+                    </div>
+
+                    <div class="bg-white p-5 rounded-2xl border border-slate-100 shadow-soft relative overflow-hidden">
+                        <div class="flex justify-between items-start">
+                            <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">In Progress</span>
+                            <div class="p-2 rounded-lg bg-sky-50 text-sky-500"><i data-lucide="loader" class="w-3.5 h-3.5 animate-spin"></i></div>
+                        </div>
+                        <div class="text-2xl font-extrabold text-slate-900 mt-2" id="metric-in-progress">0</div>
+                        <p class="text-[9px] text-slate-400 mt-1">Actively processing in operational workflow</p>
+                    </div>
+
+                    <div class="bg-white p-5 rounded-2xl border border-slate-100 shadow-soft relative overflow-hidden">
+                        <div class="flex justify-between items-start">
+                            <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Processed</span>
+                            <div class="p-2 rounded-lg bg-emerald-50 text-emerald-500"><i data-lucide="package-check" class="w-3.5 h-3.5"></i></div>
+                        </div>
+                        <div class="text-2xl font-extrabold text-slate-900 mt-2" id="metric-processed">0</div>
+                        <p class="text-[9px] text-slate-400 mt-1">Prebooking files successfully verified or rejected</p>
+                    </div>
+                </div>
+
+                <!-- Processed breakdown statistics -->
+                <div class="bg-white rounded-2xl border border-slate-100 p-5 shadow-soft">
+                    <h3 class="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-4">Processed Outcome Statistics</h3>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 lg:gap-6 divide-y md:divide-y-0 md:divide-x divide-slate-100">
+                        <div class="pt-3 md:pt-0">
+                            <span class="text-xs font-medium text-slate-500">Rejected (Missing Docs/Approval)</span>
+                            <div class="text-xl font-bold bmo-red-text mt-1" id="submetric-rejected-docs">0</div>
+                            <span class="text-[9px] text-slate-400 block mt-0.5">Boarding sheets, promissory notes, or LLA missing</span>
+                        </div>
+                        <div class="pt-3 md:pt-0 md:pl-6">
+                            <span class="text-xs font-medium text-slate-500">Successfully Verified</span>
+                            <div class="text-xl font-bold text-emerald-600 mt-1" id="submetric-verified-pass">0</div>
+                            <span class="text-[9px] text-slate-400 block mt-0.5">Authorized files successfully updated</span>
+                        </div>
+                        <div class="pt-3 md:pt-0 md:pl-6">
+                            <span class="text-xs font-medium text-slate-500">Failed Scrutiny Errors</span>
+                            <div class="text-xl font-bold text-amber-500 mt-1" id="submetric-failed-scrutiny">0</div>
+                            <span class="text-[9px] text-slate-400 block mt-0.5">Flagged for mismatch (SSN, date, entity, etc.)</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Action Desk Overview -->
+                <div class="space-y-3">
+                    <h2 class="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-2">
+                        <i data-lucide="alert-octagon" class="w-4 h-4 bmo-blue-text"></i> Pending Action Queue Overview
+                    </h2>
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 lg:gap-6">
+                        <!-- Rejections Card -->
+                        <div onclick="switchScreen('hitl')" class="bg-white p-4 lg:p-5 rounded-2xl border border-slate-100 shadow-soft hover:shadow-premium transition cursor-pointer flex flex-col justify-between">
+                            <div class="space-y-2">
+                                <span class="inline-block text-[9px] font-bold text-rose-600 bg-rose-50 px-2 py-0.5 rounded-md border border-rose-100">Type 1</span>
+                                <h4 class="text-xs font-bold text-slate-800">Approve Missing Docs / Rejection</h4>
+                                <p class="text-[10px] text-slate-400 leading-relaxed">Validate rejections due to missing LLA, Promissory Note, or Boarding Data Sheet.</p>
+                            </div>
+                            <div class="mt-4 flex justify-between items-center pt-3 border-t border-slate-50">
+                                <span class="text-[9px] text-slate-400 font-bold uppercase tracking-wider">Pending Task</span>
+                                <span class="text-base font-extrabold text-slate-700" id="badge-hitl-rejections">0</span>
+                            </div>
+                        </div>
+
+                        <!-- Passes Card -->
+                        <div onclick="switchScreen('hitl')" class="bg-white p-4 lg:p-5 rounded-2xl border border-slate-100 shadow-soft hover:shadow-premium transition cursor-pointer flex flex-col justify-between">
+                            <div class="space-y-2">
+                                <span class="inline-block text-[9px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-100">Type 2</span>
+                                <h4 class="text-xs font-bold text-slate-800">Prebooking Verification (Passed)</h4>
+                                <p class="text-[10px] text-slate-400 leading-relaxed">Authorize and release system validated files that passed all compliance checks.</p>
+                            </div>
+                            <div class="mt-4 flex justify-between items-center pt-3 border-t border-slate-50">
+                                <span class="text-[9px] text-slate-400 font-bold uppercase tracking-wider">Pending Release</span>
+                                <span class="text-base font-extrabold text-slate-700" id="badge-hitl-passes">0</span>
+                            </div>
+                        </div>
+
+                        <!-- Fails Card -->
+                        <div onclick="switchScreen('hitl')" class="bg-white p-4 lg:p-5 rounded-2xl border border-slate-100 shadow-soft hover:shadow-premium transition cursor-pointer flex flex-col justify-between">
+                            <div class="space-y-2">
+                                <span class="inline-block text-[9px] font-bold text-amber-600 bg-amber-50 px-2 py-0.5 rounded-md border border-amber-100">Type 3</span>
+                                <h4 class="text-xs font-bold text-slate-800">Prebooking Scrutiny Failed</h4>
+                                <p class="text-[10px] text-slate-400 leading-relaxed">Authorize rejections or reroute validation checks due to automated discrepancies.</p>
+                            </div>
+                            <div class="mt-4 flex justify-between items-center pt-3 border-t border-slate-50">
+                                <span class="text-[9px] text-slate-400 font-bold uppercase tracking-wider">Pending Actions</span>
+                                <span class="text-base font-extrabold text-slate-700" id="badge-hitl-fails">0</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- SCREEN 2: SCRUTINY SCREEN -->
+            <section id="screen-scrutiny" class="space-y-4 screen-view hidden animate-fade-in max-w-7xl mx-auto">
+                <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                    <div>
+                        <h1 class="text-xl lg:text-2xl font-bold text-slate-900 tracking-tight">Scrutiny Center</h1>
+                        <p class="text-xs text-slate-400 mt-0.5">Audit, trace, and inspect verified or active in-system prebooking pipeline requests.</p>
+                    </div>
+                    <button onclick="toggleScrutinyView()" id="btn-scrutiny-toggle" class="bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 shadow-sm self-start sm:self-auto">
+                        <i data-lucide="filter" class="w-3.5 h-3.5 text-slate-400"></i> Show All System Requests
+                    </button>
+                </div>
+
+                <div class="bg-white rounded-2xl border border-slate-100 shadow-soft overflow-hidden">
+                    <div class="px-5 py-4 border-b border-slate-50 flex justify-between items-center">
+                        <span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest" id="scrutiny-table-title">Requests Under Process</span>
+                        <span class="text-xs font-bold text-slate-700 bg-slate-50 px-2.5 py-1 rounded-lg border border-slate-100" id="scrutiny-count-badge">0 Requests</span>
+                    </div>
+                    
+                    <!-- Constrained Scroll Area optimized for 14-inch screens -->
+                    <div class="overflow-x-auto max-h-[calc(100vh-13rem)] overflow-y-auto">
+                        <table class="min-w-full divide-y divide-slate-100 text-sm text-left">
+                            <thead class="bg-slate-50/75 sticky top-0 z-10">
+                                <tr>
+                                    <th class="px-6 py-3 text-xs font-bold text-slate-400 uppercase tracking-wider">Request ID</th>
+                                    <th class="px-6 py-3 text-xs font-bold text-slate-400 uppercase tracking-wider">Client Name</th>
+                                    <th class="px-6 py-3 text-xs font-bold text-slate-400 uppercase tracking-wider">Loan Amount</th>
+                                    <th class="px-6 py-3 text-xs font-bold text-slate-400 uppercase tracking-wider">Extraction Stage</th>
+                                    <th class="px-6 py-3 text-xs font-bold text-slate-400 uppercase tracking-wider">Status</th>
+                                    <th class="px-6 py-3 text-right text-xs font-bold text-slate-400 tracking-wider">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="scrutiny-tbody" class="divide-y divide-slate-100 bg-white">
+                                <!-- Dynamic Rows -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <!-- SCREEN 3: HITL APPROVAL SCREEN -->
+            <section id="screen-hitl" class="space-y-4 screen-view hidden animate-fade-in h-[calc(100vh-6.5rem)] lg:h-[calc(100vh-7.5rem)] flex flex-col">
+                <div class="shrink-0">
+                    <h1 class="text-xl lg:text-2xl font-bold text-slate-900 tracking-tight">HITL Approval Console</h1>
+                    <p class="text-xs text-slate-400 mt-0.5">Review operational discrepancies, manage system-generated feedback, and authorize exceptions.</p>
+                </div>
+
+                <!-- Scrolling grid container lock matching 14-inch physical bounds -->
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 flex-1 overflow-hidden min-h-0">
+                    
+                    <!-- Column 1: Reject Validation -->
+                    <div class="bg-slate-100/60 border border-slate-200/50 rounded-2xl p-4 flex flex-col h-full overflow-hidden">
+                        <div class="mb-3 flex justify-between items-center px-1 shrink-0">
+                            <div class="flex items-center gap-2">
+                                <span class="w-2 h-2 rounded-full bg-rose-500 shrink-0 animate-pulse"></span>
+                                <h3 class="text-[10px] font-extrabold text-slate-500 uppercase tracking-wider">1. Reject (No Doc / Approval)</h3>
+                            </div>
+                            <span class="text-[10px] font-bold text-slate-500 bg-white border border-slate-200/50 px-2 py-0.5 rounded-full" id="col-count-rejections">0</span>
+                        </div>
+                        <div class="space-y-3 overflow-y-auto flex-1 pr-1" id="col-rejections-list">
+                            <!-- Injected Rejections dynamic cards -->
+                        </div>
+                    </div>
+
+                    <!-- Column 2: Approved / Verified Passes -->
+                    <div class="bg-slate-100/60 border border-slate-200/50 rounded-2xl p-4 flex flex-col h-full overflow-hidden">
+                        <div class="mb-3 flex justify-between items-center px-1 shrink-0">
+                            <div class="flex items-center gap-2">
+                                <span class="w-2 h-2 rounded-full bg-emerald-500 shrink-0"></span>
+                                <h3 class="text-[10px] font-extrabold text-slate-500 uppercase tracking-wider">2. Prebooking Passes</h3>
+                            </div>
+                            <span class="text-[10px] font-bold text-slate-500 bg-white border border-slate-200/50 px-2 py-0.5 rounded-full" id="col-count-passes">0</span>
+                        </div>
+                        <div class="space-y-3 overflow-y-auto flex-1 pr-1" id="col-passes-list">
+                            <!-- Injected Passes dynamic cards -->
+                        </div>
+                    </div>
+
+                    <!-- Column 3: Scrutiny Failure Checks -->
+                    <div class="bg-slate-100/60 border border-slate-200/50 rounded-2xl p-4 flex flex-col h-full overflow-hidden md:col-span-2 lg:col-span-1">
+                        <div class="mb-3 flex justify-between items-center px-1 shrink-0">
+                            <div class="flex items-center gap-2">
+                                <span class="w-2 h-2 rounded-full bg-amber-500 shrink-0 animate-pulse"></span>
+                                <h3 class="text-[10px] font-extrabold text-slate-500 uppercase tracking-wider">3. Scrutiny Fail Checks</h3>
+                            </div>
+                            <span class="text-[10px] font-bold text-slate-500 bg-white border border-slate-200/50 px-2 py-0.5 rounded-full" id="col-count-fails">0</span>
+                        </div>
+                        <div class="space-y-3 overflow-y-auto flex-1 pr-1" id="col-fails-list">
+                            <!-- Injected Fail dynamic cards -->
+                        </div>
+                    </div>
+
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- MODALS -->
+
+    <!-- Modal 1: Scrutiny Trace & Final Outcome Sheet -->
+    <div id="modal-scrutiny-detail" class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm hidden z-50 flex items-center justify-center p-4 animate-fade-in">
+        <div class="bg-white rounded-2xl shadow-premium border border-slate-100 max-w-lg w-full overflow-hidden transform transition-all duration-300">
+            <div class="px-6 py-4 border-b border-slate-50 flex justify-between items-center">
+                <h3 class="text-xs font-bold text-slate-900 uppercase tracking-widest flex items-center gap-2">
+                    <i data-lucide="network" class="w-4 h-4 bmo-blue-text"></i> Prebooking Routing Log
+                </h3>
+                <button onclick="closeModal('modal-scrutiny-detail')" class="text-slate-400 hover:text-slate-600">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+            <div class="p-6 space-y-6">
+                <div class="grid grid-cols-2 gap-4 bg-slate-50 p-4 rounded-xl text-xs">
+                    <div>
+                        <span class="text-slate-400 block font-semibold uppercase tracking-wider text-[9px]">Request Reference</span>
+                        <strong id="sd-modal-id" class="text-slate-700 font-code text-xs">LNK-XXXX</strong>
+                    </div>
+                    <div>
+                        <span class="text-slate-400 block font-semibold uppercase tracking-wider text-[9px]">Target Applicant</span>
+                        <strong id="sd-modal-name" class="text-slate-700 font-semibold">N/A</strong>
+                    </div>
+                </div>
+
+                <!-- Trace Area with Locked Absolute Alignment Grid -->
+                <div id="sd-trace-under-process" class="space-y-4">
+                    <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">In-System Processing Stages</span>
+                    
+                    <div class="relative space-y-6 pl-2">
+                        <!-- MATHEMATICALLY LOCKED VERTICAL CONNECTOR LINE -->
+                        <div class="absolute left-[13px] top-2.5 bottom-2.5 w-0.5 bg-slate-100"></div>
+
+                        <!-- Timeline Item 1 -->
+                        <div class="flex items-start gap-4 relative">
+                            <div class="w-7 h-7 rounded-full bg-emerald-500 text-white flex items-center justify-center border-4 border-white z-10 shrink-0 shadow-sm">
+                                <i data-lucide="check" class="w-3 h-3"></i>
+                            </div>
+                            <div class="space-y-0.5 pt-0.5">
+                                <h4 class="text-xs font-bold text-slate-700">Document Extraction</h4>
+                                <p class="text-[10px] text-slate-400 leading-relaxed">Automated parsing of source documentation successfully completed.</p>
+                            </div>
+                        </div>
+
+                        <!-- Timeline Item 2 -->
+                        <div class="flex items-start gap-4 relative">
+                            <div id="sd-stage-2-bullet" class="w-7 h-7 rounded-full bg-slate-200 border-4 border-white z-10 shrink-0 shadow-sm flex items-center justify-center">
+                                <span class="w-1.5 h-1.5 rounded-full bg-slate-400"></span>
+                            </div>
+                            <div class="space-y-0.5 pt-0.5">
+                                <h4 class="text-xs font-bold text-slate-700" id="sd-stage-2-title">Entity Extraction & Cross-checks</h4>
+                                <p class="text-[10px] text-slate-400 leading-relaxed" id="sd-stage-2-desc">Awaiting process cue allocation.</p>
+                            </div>
+                        </div>
+
+                        <!-- Timeline Item 3 -->
+                        <div class="flex items-start gap-4 relative">
+                            <div id="sd-stage-3-bullet" class="w-7 h-7 rounded-full bg-slate-100 border-4 border-white z-10 shrink-0 shadow-sm flex items-center justify-center">
+                                <span class="w-1.5 h-1.5 rounded-full bg-slate-300"></span>
+                            </div>
+                            <div class="space-y-0.5 pt-0.5">
+                                <h4 class="text-xs font-bold text-slate-400" id="sd-stage-3-title">Document Scrutiny</h4>
+                                <p class="text-[10px] text-slate-400 leading-relaxed" id="sd-stage-3-desc">System checking rules logic pending.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="sd-trace-completed" class="space-y-4 hidden">
+                    <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Final Validation Outcomes</span>
+                    <div id="sd-outcome-banner" class="p-4 rounded-xl flex items-start gap-3">
+                        <!-- Dynamic BANNER injection -->
+                    </div>
+                    <div class="bg-slate-50 p-4 rounded-xl border border-slate-100">
+                        <span class="text-[9px] font-bold text-slate-400 block uppercase tracking-wide">Audit Summary:</span>
+                        <p id="sd-outcome-notes" class="text-xs text-slate-600 mt-1 leading-relaxed">N/A</p>
+                    </div>
+                </div>
+            </div>
+            <div class="p-4 border-t border-slate-50 bg-slate-50 flex justify-end">
+                <button onclick="closeModal('modal-scrutiny-detail')" class="border border-slate-200 hover:bg-slate-100 text-slate-700 px-4 py-2 rounded-xl text-xs font-bold transition">
+                    Close Audit Log
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal 2: Action Confirmations -->
+    <div id="modal-approve-confirm" class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm hidden z-50 flex items-center justify-center p-4 animate-fade-in">
+        <div class="bg-white rounded-2xl shadow-premium border border-slate-100 max-w-md w-full overflow-hidden transform transition-all duration-300">
+            <div class="p-5 border-b border-slate-50">
+                <h3 class="text-xs font-bold text-slate-900 uppercase tracking-widest flex items-center gap-2">
+                    <i data-lucide="check-circle" class="w-4 h-4 text-emerald-600"></i> Submit Authorization Action
+                </h3>
+            </div>
+            <div class="p-6">
+                <p class="text-xs text-slate-600 leading-relaxed" id="confirm-modal-text">
+                    By submitting this action, you will finalize this request on BMO's core records.
+                </p>
+            </div>
+            <div class="p-4 border-t border-slate-50 bg-slate-50/75 flex justify-end space-x-3">
+                <button onclick="closeModal('modal-approve-confirm')" class="border border-slate-200 hover:bg-slate-100 text-slate-700 px-4 py-2 rounded-xl text-xs font-bold transition">
+                    Cancel
+                </button>
+                <button id="btn-modal-confirm-approve" class="bmo-blue-brand hover:bg-sky-800 text-white px-4 py-2 rounded-xl text-xs font-bold transition">
+                    Confirm & Release
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal 3: Reject & Feedback / Audit Fail Redirect -->
+    <div id="modal-feedback" class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm hidden z-50 flex items-center justify-center p-4 animate-fade-in">
+        <div class="bg-white rounded-2xl shadow-premium border border-slate-100 max-w-md w-full overflow-hidden transform transition-all duration-300">
+            <div class="p-5 border-b border-slate-50">
+                <h3 class="text-xs font-bold text-slate-900 uppercase tracking-widest flex items-center gap-2">
+                    <i data-lucide="message-square" class="w-4 h-4 bmo-red-text"></i> Register Audit Rejection Feedback
+                </h3>
+            </div>
+            <form id="feedback-form" onsubmit="submitFeedbackForm(event)">
+                <div class="p-6 space-y-4">
+                    <p class="text-xs text-slate-500 leading-relaxed">
+                        Specify compliance rejection reasons or missing elements to route this file back to the scrutiny queue.
+                    </p>
+
+                    <div class="space-y-1.5">
+                        <label class="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Compliance Checklist Injections</label>
+                        <div class="flex flex-wrap gap-1.5" id="feedback-prefill-container">
+                            <!-- Injected dynamically based on category -->
+                        </div>
+                    </div>
+
+                    <div class="space-y-1.5">
+                        <label class="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Custom Reviewer Notes</label>
+                        <textarea id="feedback-notes" required placeholder="Specify details regarding missing records, mismatched SSNs, LLAs or promissory notes..." class="w-full h-24 border border-slate-200 rounded-xl p-3 text-xs focus:ring-1 focus:ring-sky-500 focus:outline-none leading-relaxed"></textarea>
+                    </div>
+                </div>
+                <div class="p-4 border-t border-slate-50 bg-slate-50 flex justify-end space-x-3">
+                    <button type="button" onclick="closeModal('modal-feedback')" class="border border-slate-200 hover:bg-slate-100 text-slate-700 px-4 py-2 rounded-xl text-xs font-bold transition">
+                        Cancel
+                    </button>
+                    <button type="submit" class="bmo-red-brand hover:bg-rose-700 text-white px-4 py-2 rounded-xl text-xs font-bold transition">
+                        Reject & Route Back
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal 4: Excel Document Simulator Modal -->
+    <div id="modal-excel-view" class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm hidden z-50 flex items-center justify-center p-4 animate-fade-in">
+        <div class="bg-white rounded-2xl shadow-premium border border-slate-100 max-w-2xl w-full overflow-hidden transform transition-all duration-300">
+            <div class="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+                <div class="flex items-center space-x-2">
+                    <div class="bg-emerald-600 text-white p-1.5 rounded-lg">
+                        <i data-lucide="file-spreadsheet" class="w-4 h-4"></i>
+                    </div>
+                    <span class="text-xs font-bold text-slate-700" id="excel-sheet-name">BMO_Verification_Ledger.xlsx</span>
+                </div>
+                <button onclick="closeModal('modal-excel-view')" class="text-slate-400 hover:text-slate-600">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+            <div class="p-5 overflow-x-auto">
+                <table class="min-w-full text-left text-xs text-slate-600 font-code border divide-y divide-slate-100 rounded-xl overflow-hidden">
+                    <thead class="bg-slate-50 text-[10px] uppercase font-bold text-slate-500">
+                        <tr>
+                            <th class="px-3 py-2 border-r">Cell</th>
+                            <th class="px-3 py-2 border-r">Compliance Check Parameters</th>
+                            <th class="px-3 py-2 border-r">Extracted Data Field</th>
+                            <th class="px-3 py-2">System Confidence</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-100">
+                        <tr>
+                            <td class="px-3 py-2 border-r bg-slate-50/50">A1</td>
+                            <td class="px-3 py-2 border-r font-medium">Underwriting Entity Name</td>
+                            <td class="px-3 py-2 border-r font-semibold" id="excel-td-name">N/A</td>
+                            <td class="px-3 py-2 text-emerald-600 font-bold">100.0% Confirmed</td>
+                        </tr>
+                        <tr>
+                            <td class="px-3 py-2 border-r bg-slate-50/50">A2</td>
+                            <td class="px-3 py-2 border-r font-medium">Approved Principal Value</td>
+                            <td class="px-3 py-2 border-r font-semibold text-slate-700" id="excel-td-amount">$0.00</td>
+                            <td class="px-3 py-2 text-emerald-600 font-bold">99.9% Match</td>
+                        </tr>
+                        <tr>
+                            <td class="px-3 py-2 border-r bg-slate-50/50">A3</td>
+                            <td class="px-3 py-2 border-r font-medium">Boarding Data Sheet Status</td>
+                            <td class="px-3 py-2 border-r text-emerald-600 font-bold">Signed / Active</td>
+                            <td class="px-3 py-2 text-emerald-600 font-bold">100.0%</td>
+                        </tr>
+                        <tr>
+                            <td class="px-3 py-2 border-r bg-slate-50/50">A4</td>
+                            <td class="px-3 py-2 border-r font-medium">Promissory Note Matching</td>
+                            <td class="px-3 py-2 border-r">Checked-BMO-823</td>
+                            <td class="px-3 py-2 text-emerald-600 font-bold">98.5%</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            <div class="p-4 border-t border-slate-100 bg-slate-50 flex justify-between items-center">
+                <span class="text-[10px] text-slate-400">Pre-compiled OCR spreadsheet. Fully cleared compliance profile.</span>
+                <button onclick="closeModal('modal-excel-view')" class="bmo-blue-brand hover:bg-sky-800 text-white px-4 py-2 rounded-xl text-xs font-bold">
+                    Close Sheet Viewer
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal 5: Scrutiny Failure Reasons View Modal -->
+    <div id="modal-fail-reasons" class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm hidden z-50 flex items-center justify-center p-4 animate-fade-in">
+        <div class="bg-white rounded-2xl shadow-premium border border-slate-100 max-w-md w-full overflow-hidden transform transition-all duration-300">
+            <div class="p-5 border-b border-slate-50">
+                <h3 class="text-xs font-bold text-slate-900 uppercase tracking-widest flex items-center gap-2">
+                    <i data-lucide="shield-alert" class="w-4 h-4 bmo-red-text"></i> Scrutiny Discrepancy Failure Log
+                </h3>
+            </div>
+            <div class="p-6 space-y-4">
+                <p class="text-xs text-slate-500 leading-relaxed">
+                    Automated prebooking compliance rule failures:
+                </p>
+                <div class="bg-rose-50/50 border border-rose-100 p-4 rounded-xl space-y-4 text-xs" id="discrepancy-log-container">
+                    <!-- Injected dynamically -->
+                </div>
+            </div>
+            <div class="p-4 border-t border-slate-50 bg-slate-50 flex justify-end">
+                <button onclick="closeModal('modal-fail-reasons')" class="border border-slate-200 hover:bg-slate-100 text-slate-700 px-4 py-2 rounded-xl text-xs font-bold transition">
+                    Close Discrepancy Log
+                </button>
+            </div>
+        </div>
+    </div>
+
+
+    <!-- JAVASCRIPT APP CONTROLLER -->
+    <script>
+        const DEFAULT_REQUESTS = [
+            {
+                id: "LNK-2025-001",
+                customer: "Capital Alliance Holdings",
+                amount: "$1,450,000",
+                stage: "Rejected", // Stages: Document Extraction, Entity Extraction, Document Scrutiny, Human Approval, Completed, Rejected
+                status: "Failed",   // Statuses: Passed, Failed, In Progress
+                hitlType: "RejectionApproval",
+                hitlStatus: "Pending",
+                rejectionCategory: "unavailability",
+                missingDocs: ["Boarding Data Sheet", "Promissory Note"],
+                notes: "Unavailability: Missing verified Boarding Data Sheet & Promissory Note documents."
+            },
+            {
+                id: "LNK-2025-002",
+                customer: "Apex Logistics Corp",
+                amount: "$680,000",
+                stage: "Completed",
+                status: "Passed",
+                hitlType: "PassApproval",
+                hitlStatus: "Pending",
+                notes: "Prebooking validation audit finished. System verified pass. Excel sheet is compiled."
+            },
+            {
+                id: "LNK-2025-003",
+                customer: "Sovereign Pharma Labs",
+                amount: "$2,200,000",
+                stage: "Rejected",
+                status: "Failed",
+                hitlType: "FailApproval",
+                hitlStatus: "Pending",
+                rejectionCategory: "mismatch",
+                scrutinyFailures: ["ssn mismatch", "entity mismatch"],
+                notes: "Failed scrutiny validation: Entity extraction detected ssn mismatch & registration name entity mismatch."
+            },
+            {
+                id: "LNK-2025-004",
+                customer: "Horizon Logistics",
+                amount: "$420,000",
+                stage: "Document Extraction",
+                status: "In Progress",
+                hitlType: null,
+                hitlStatus: null,
+                notes: "Intake checks cleared. OCR scanning system extraction active."
+            },
+            {
+                id: "LNK-2025-005",
+                customer: "Trinity Real Estate",
+                amount: "$3,100,000",
+                stage: "Document Scrutiny",
+                status: "In Progress",
+                hitlType: null,
+                hitlStatus: null,
+                notes: "Tax transcript and corporate credit checking rule parameters execution."
+            },
+            {
+                id: "LNK-2025-006",
+                customer: "Vanguard Tech Partners",
+                amount: "$120,000",
+                stage: "Entity Extraction",
+                status: "In Progress",
+                hitlType: null,
+                hitlStatus: null,
+                notes: "Mapping operational signers and parsing corporate registrations."
+            },
+            {
+                id: "LNK-2025-007",
+                customer: "NextGen Energy Fund",
+                amount: "$5,000,000",
+                stage: "Intake", // Dashboard Queue Metric
+                status: "In Progress",
+                hitlType: null,
+                hitlStatus: null,
+                notes: "Raw document uploads queued for system acceptance and document extraction."
+            }
+        ];
+
+        let appState = {
+            requests: [],
+            scrutinyFilter: "under_process"
+        };
+
+        function initStore() {
+            const localData = localStorage.getItem('BMO_LOAN_PREBOOK_STATE_V4');
+            if (localData) {
+                try {
+                    appState = JSON.parse(localData);
+                } catch (e) {
+                    appState.requests = [...DEFAULT_REQUESTS];
+                }
+            } else {
+                appState.requests = JSON.parse(JSON.stringify(DEFAULT_REQUESTS));
+                saveState();
+            }
+            lucide.createIcons();
+            switchScreen('dashboard');
+            renderAll();
+        }
+
+        function saveState() {
+            localStorage.setItem('BMO_LOAN_PREBOOK_STATE_V4', JSON.stringify(appState));
+        }
+
+        function resetData() {
+            appState.requests = JSON.parse(JSON.stringify(DEFAULT_REQUESTS));
+            appState.scrutinyFilter = "under_process";
+            saveState();
+            renderAll();
+            switchScreen('dashboard');
+        }
+
+        // MOBILE SIDEBAR CONTROL
+        function toggleMobileSidebar() {
+            const sidebar = document.getElementById('sidebar-mobile');
+            const backdrop = document.getElementById('sidebar-mobile-backdrop');
+            if (sidebar.classList.contains('-translate-x-full')) {
+                sidebar.classList.remove('-translate-x-full');
+                backdrop.classList.remove('hidden');
+            } else {
+                sidebar.classList.add('-translate-x-full');
+                backdrop.classList.add('hidden');
+            }
+        }
+
+        function switchScreen(screenId) {
+            document.querySelectorAll('.screen-view').forEach(view => {
+                view.classList.add('hidden');
+            });
+            document.getElementById(`screen-${screenId}`).classList.remove('hidden');
+
+            const navs = ['dashboard', 'scrutiny', 'hitl'];
+            navs.forEach(navName => {
+                const deskNav = document.getElementById(`nav-${navName}`);
+                const mobNav = document.getElementById(`mob-nav-${navName}`);
+                
+                if (navName === screenId) {
+                    deskNav.classList.add('bg-sky-50', 'text-sky-700', 'pl-3.5', 'border-l-4', 'border-[#005A9C]');
+                    deskNav.classList.remove('text-slate-600', 'hover:bg-slate-50');
+                    mobNav.classList.add('bg-sky-50', 'text-sky-700', 'border-l-4', 'border-[#005A9C]');
+                    mobNav.classList.remove('text-slate-600');
+                } else {
+                    deskNav.classList.remove('bg-sky-50', 'text-sky-700', 'pl-3.5', 'border-l-4', 'border-[#005A9C]');
+                    deskNav.classList.add('text-slate-600', 'hover:bg-slate-50');
+                    mobNav.classList.remove('bg-sky-50', 'text-sky-700', 'border-l-4', 'border-[#005A9C]');
+                    mobNav.classList.add('text-slate-600');
+                }
+            });
+        }
+
+        function renderAll() {
+            updateDashboardMetrics();
+            renderScrutinyTable();
+            renderHitlColumns();
+            lucide.createIcons();
+        }
+
+        function updateDashboardMetrics() {
+            const reqs = appState.requests;
+
+            const inQueueCount = reqs.filter(r => r.stage === "Intake").length;
+            const inProgressCount = reqs.filter(r => r.stage !== "Intake" && r.stage !== "Completed" && r.stage !== "Rejected").length;
+            const processedCount = reqs.filter(r => (r.stage === "Completed" || r.stage === "Rejected") && r.hitlStatus !== "Pending").length;
+
+            document.getElementById('metric-in-queue').innerText = inQueueCount;
+            document.getElementById('metric-in-progress').innerText = inProgressCount;
+            document.getElementById('metric-processed').innerText = processedCount;
+
+            const rejectedDocs = reqs.filter(r => r.stage === "Rejected" && r.status === "Failed" && r.rejectionCategory === "unavailability" && r.hitlStatus !== "Pending").length;
+            const verifiedPass = reqs.filter(r => r.stage === "Completed" && r.status === "Passed" && r.hitlStatus !== "Pending").length;
+            const failedScrutiny = reqs.filter(r => r.stage === "Rejected" && r.status === "Failed" && r.rejectionCategory === "mismatch" && r.hitlStatus !== "Pending").length;
+
+            document.getElementById('submetric-rejected-docs').innerText = rejectedDocs;
+            document.getElementById('submetric-verified-pass').innerText = verifiedPass;
+            document.getElementById('submetric-failed-scrutiny').innerText = failedScrutiny;
+
+            const rejectionsCount = reqs.filter(r => r.hitlType === "RejectionApproval" && r.hitlStatus === "Pending").length;
+            const passesCount = reqs.filter(r => r.hitlType === "PassApproval" && r.hitlStatus === "Pending").length;
+            const failsCount = reqs.filter(r => r.hitlType === "FailApproval" && r.hitlStatus === "Pending").length;
+
+            document.getElementById('badge-hitl-rejections').innerText = rejectionsCount;
+            document.getElementById('badge-hitl-passes').innerText = passesCount;
+            document.getElementById('badge-hitl-fails').innerText = failsCount;
+
+            const totalHitl = rejectionsCount + passesCount + failsCount;
+            document.getElementById('hitl-badge-total').innerText = totalHitl;
+            document.getElementById('hitl-badge-mobile').innerText = totalHitl;
+        }
+
+        function toggleScrutinyView() {
+            const btn = document.getElementById('btn-scrutiny-toggle');
+            if (appState.scrutinyFilter === "under_process") {
+                appState.scrutinyFilter = "all";
+                btn.innerHTML = `<i data-lucide="filter-x" class="w-3.5 h-3.5 text-slate-400"></i> Show Under Process Only`;
+            } else {
+                appState.scrutinyFilter = "under_process";
+                btn.innerHTML = `<i data-lucide="filter" class="w-3.5 h-3.5 text-slate-400"></i> Show All System Requests`;
+            }
+            renderScrutinyTable();
+            lucide.createIcons();
+        }
+
+        function renderScrutinyTable() {
+            const tbody = document.getElementById('scrutiny-tbody');
+            tbody.innerHTML = "";
+
+            let systemRequests = appState.requests.filter(r => r.stage !== "Intake");
+
+            if (appState.scrutinyFilter === "under_process") {
+                document.getElementById('scrutiny-table-title').innerText = "Requests Under Process";
+                systemRequests = systemRequests.filter(r => r.stage !== "Completed" && r.stage !== "Rejected");
+            } else {
+                document.getElementById('scrutiny-table-title').innerText = "All Active & Finalized Requests";
+            }
+
+            document.getElementById('scrutiny-count-badge').innerText = `${systemRequests.length} Active Records`;
+
+            if (systemRequests.length === 0) {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="6" class="px-6 py-12 text-center text-xs text-slate-400 font-medium">
+                            No requests meet this filter setting.
+                        </td>
+                    </tr>
+                `;
+                return;
+            }
+
+            systemRequests.forEach(req => {
+                let badgeClass = "bg-slate-50 text-slate-600 border-slate-100";
+                
+                if (req.status === "Passed") {
+                    badgeClass = "bg-emerald-50 text-emerald-700 border-emerald-100/80";
+                } else if (req.status === "Failed") {
+                    badgeClass = "bg-rose-50 text-rose-700 border-rose-100/80";
+                } else if (req.status === "In Progress") {
+                    badgeClass = "bg-sky-50 text-sky-700 border-sky-100/80";
+                }
+
+                const tr = document.createElement('tr');
+                tr.className = "hover:bg-slate-50/50 transition duration-150 cursor-pointer text-xs";
+                tr.onclick = () => openScrutinyDetail(req.id);
+                tr.innerHTML = `
+                    <td class="px-6 py-3 font-code text-[11px] font-semibold text-[#005A9C]">${req.id}</td>
+                    <td class="px-6 py-3 font-bold text-slate-700">${req.customer}</td>
+                    <td class="px-6 py-3 font-medium text-slate-500">${req.amount}</td>
+                    <td class="px-6 py-3 font-semibold text-slate-500 text-[10px] uppercase tracking-wide">${req.stage}</td>
+                    <td class="px-6 py-3">
+                        <span class="inline-flex items-center px-2 py-0.5 rounded-md text-[9px] font-bold border ${badgeClass}">
+                            <span class="w-1 h-1 rounded-full mr-1.5 ${req.status === 'Passed' ? 'bg-emerald-500' : req.status === 'Failed' ? 'bg-rose-500' : 'bg-sky-500'}"></span>
+                            ${req.status}
+                        </span>
+                    </td>
+                    <td class="px-6 py-3 text-right">
+                        <button class="text-[10px] text-slate-400 hover:text-[#005A9C] font-bold uppercase tracking-wider flex items-center gap-1 ml-auto">
+                            <i data-lucide="compass" class="w-3.5 h-3.5"></i> Inspect File
+                        </button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        function openScrutinyDetail(requestId) {
+            const req = appState.requests.find(r => r.id === requestId);
+            if (!req) return;
+
+            document.getElementById('sd-modal-id').innerText = req.id;
+            document.getElementById('sd-modal-name').innerText = req.customer;
+
+            const panelUnderProcess = document.getElementById('sd-trace-under-process');
+            const panelCompleted = document.getElementById('sd-trace-completed');
+
+            if (req.stage !== "Completed" && req.stage !== "Rejected") {
+                panelUnderProcess.classList.remove('hidden');
+                panelCompleted.classList.add('hidden');
+
+                const bullet2 = document.getElementById('sd-stage-2-bullet');
+                const desc2 = document.getElementById('sd-stage-2-desc');
+                const title2 = document.getElementById('sd-stage-2-title');
+                const bullet3 = document.getElementById('sd-stage-3-bullet');
+                const title3 = document.getElementById('sd-stage-3-title');
+                const desc3 = document.getElementById('sd-stage-3-desc');
+
+                if (req.stage === "Document Extraction") {
+                    bullet2.className = "w-7 h-7 rounded-full bg-slate-100 border-4 border-white z-10 shrink-0 shadow-sm flex items-center justify-center";
+                    bullet2.innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-slate-300"></span>';
+                    title2.className = "text-xs font-bold text-slate-400";
+                    desc2.innerText = "OCR system indexing pending.";
+
+                    bullet3.className = "w-7 h-7 rounded-full bg-slate-100 border-4 border-white z-10 shrink-0 shadow-sm flex items-center justify-center";
+                    bullet3.innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-slate-300"></span>';
+                    title3.className = "text-xs font-bold text-slate-400";
+                    desc3.innerText = "System compliance checking pending.";
+                } else if (req.stage === "Entity Extraction") {
+                    bullet2.className = "w-7 h-7 rounded-full bg-sky-500 text-white z-10 shrink-0 shadow-sm flex items-center justify-center border-4 border-white animate-pulse";
+                    bullet2.innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-white"></span>';
+                    title2.className = "text-xs font-bold text-sky-700";
+                    desc2.innerText = "OCR verified, matching regulatory SSN and registrations name structures.";
+
+                    bullet3.className = "w-7 h-7 rounded-full bg-slate-100 border-4 border-white z-10 shrink-0 shadow-sm flex items-center justify-center";
+                    bullet3.innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-slate-300"></span>';
+                    title3.className = "text-xs font-bold text-slate-400";
+                    desc3.innerText = "Rules logic engine pending.";
+                } else {
+                    bullet2.className = "w-7 h-7 rounded-full bg-emerald-500 text-white z-10 shrink-0 shadow-sm flex items-center justify-center border-4 border-white";
+                    bullet2.innerHTML = '<i data-lucide="check" class="w-3.5 h-3.5"></i>';
+                    title2.className = "text-xs font-bold text-slate-700";
+                    desc2.innerText = "Entity fields successfully extracted.";
+
+                    bullet3.className = "w-7 h-7 rounded-full bg-amber-500 text-white z-10 shrink-0 shadow-sm flex items-center justify-center border-4 border-white animate-pulse";
+                    bullet3.innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-white"></span>';
+                    title3.className = "text-xs font-bold text-amber-600";
+                    desc3.innerText = `Active analysis running inside ${req.stage}.`;
+                }
+            } else {
+                panelUnderProcess.classList.add('hidden');
+                panelCompleted.classList.remove('hidden');
+
+                const banner = document.getElementById('sd-outcome-banner');
+                const notes = document.getElementById('sd-outcome-notes');
+                notes.innerText = req.notes || "No operational logging files attached to this record.";
+
+                if (req.stage === "Completed" && req.status === "Passed") {
+                    banner.className = "p-4 rounded-xl flex items-start gap-3 bg-emerald-50 border border-emerald-100/80 text-emerald-800 text-xs";
+                    banner.innerHTML = `
+                        <i data-lucide="check-circle-2" class="w-5 h-5 text-emerald-600 shrink-0 mt-0.5"></i>
+                        <div>
+                            <strong class="font-bold block text-emerald-900 mb-0.5">Prebooking Complete</strong>
+                            <span>The request passed all regulatory and signature validations. It has been released to BMO Core Operations databases.</span>
+                        </div>
+                    `;
+                } else if (req.stage === "Rejected" && req.rejectionCategory === "unavailability") {
+                    banner.className = "p-4 rounded-xl flex items-start gap-3 bg-rose-50 border border-rose-100/80 text-rose-800 text-xs";
+                    banner.innerHTML = `
+                        <i data-lucide="file-warning" class="w-5 h-5 text-rose-600 shrink-0 mt-0.5"></i>
+                        <div>
+                            <strong class="font-bold block text-rose-900 mb-0.5">Discarded - Unavailability Exception</strong>
+                            <span>System and operations verified that the file lacks required signed Boarding Sheets, Promissory Notes, or LLA approvals.</span>
+                        </div>
+                    `;
+                } else if (req.stage === "Rejected" && req.rejectionCategory === "mismatch") {
+                    banner.className = "p-4 rounded-xl flex items-start gap-3 bg-amber-50 border border-amber-100/80 text-amber-800 text-xs";
+                    banner.innerHTML = `
+                        <i data-lucide="alert-triangle" class="w-5 h-5 text-amber-600 shrink-0 mt-0.5"></i>
+                        <div>
+                            <strong class="font-bold block text-amber-900 mb-0.5">Rejected - Scrutiny Failed</strong>
+                            <span>Automated verification checks failed due to data mismatches (such as date mismatches, entity mismatches, or SSN mismatches).</span>
+                        </div>
+                    `;
+                }
+            }
+
+            openModal('modal-scrutiny-detail');
+            lucide.createIcons();
+        }
+
+        function renderHitlColumns() {
+            const rejectionsList = document.getElementById('col-rejections-list');
+            const passesList = document.getElementById('col-passes-list');
+            const failsList = document.getElementById('col-fails-list');
+
+            rejectionsList.innerHTML = "";
+            passesList.innerHTML = "";
+            failsList.innerHTML = "";
+
+            let rejCount = 0;
+            let passCount = 0;
+            let failCount = 0;
+
+            appState.requests.forEach(req => {
+                if (req.hitlStatus !== "Pending") return;
+
+                // Task Type 1: Rejection Validation
+                if (req.hitlType === "RejectionApproval") {
+                    rejCount++;
+                    const card = document.createElement('div');
+                    card.className = "bg-white p-4 lg:p-5 rounded-2xl border border-slate-200/60 shadow-soft space-y-3.5 hover:border-slate-300 transition animate-fade-in shrink-0";
+                    card.innerHTML = `
+                        <div class="flex justify-between items-start">
+                            <div class="space-y-0.5">
+                                <span class="text-[9px] font-code font-bold text-[#005A9C] tracking-wide block">ID: ${req.id}</span>
+                                <h4 class="text-xs font-bold text-slate-800 leading-tight">${req.customer}</h4>
+                            </div>
+                            <span class="text-[9px] font-bold text-rose-600 bg-rose-50 px-2 py-0.5 rounded-md border border-rose-100 shrink-0">Task 1</span>
+                        </div>
+                        
+                        <div class="text-[10.5px] text-slate-500 space-y-1.5 bg-slate-50 p-3 rounded-xl border border-slate-100">
+                            <span class="font-bold text-slate-700 block text-[9px] uppercase tracking-wider">Unavailability Issues</span>
+                            <div class="flex flex-wrap gap-1">
+                                ${req.missingDocs ? req.missingDocs.map(doc => `<span class="bg-white text-slate-600 px-1.5 py-0.5 rounded-md text-[8.5px] font-semibold border border-slate-200/85">${doc}</span>`).join('') : '<span class="text-rose-600 font-bold text-[9px]">No approvals found</span>'}
+                            </div>
+                            <p class="text-[9.5px] leading-relaxed text-slate-400 mt-0.5 italic">${req.notes}</p>
+                        </div>
+
+                        <div class="grid grid-cols-2 gap-2 pt-1 border-t border-slate-50">
+                            <button onclick="triggerApprove('${req.id}', 'rejection')" class="bg-emerald-600 hover:bg-emerald-700 text-white text-[10.5px] font-bold py-1.5 rounded-xl transition">Approve</button>
+                            <button onclick="triggerRejectFeedback('${req.id}', 'rejection')" class="bg-slate-50 border border-slate-200 text-slate-700 hover:bg-slate-100 text-[10.5px] font-bold py-1.5 rounded-xl transition">Reject & Feedback</button>
+                        </div>
+                    `;
+                    rejectionsList.appendChild(card);
+                }
+
+                // Task Type 2: Verified Passes
+                else if (req.hitlType === "PassApproval") {
+                    passCount++;
+                    const card = document.createElement('div');
+                    card.className = "bg-white p-4 lg:p-5 rounded-2xl border border-slate-200/60 shadow-soft space-y-3.5 hover:border-slate-300 transition animate-fade-in shrink-0";
+                    card.innerHTML = `
+                        <div class="flex justify-between items-start">
+                            <div class="space-y-0.5">
+                                <span class="text-[9px] font-code font-bold text-[#005A9C] tracking-wide block">ID: ${req.id}</span>
+                                <h4 class="text-xs font-bold text-slate-800 leading-tight">${req.customer}</h4>
+                            </div>
+                            <span class="text-[9px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-100 shrink-0">Task 2</span>
+                        </div>
+
+                        <div class="p-2.5 rounded-xl bg-emerald-50/50 border border-emerald-100/60 flex items-center justify-between">
+                            <span class="text-[9.5px] font-bold text-emerald-800 flex items-center gap-1">
+                                <span class="w-1 h-1 rounded-full bg-emerald-500 animate-pulse"></span> Passed Verified
+                            </span>
+                            <button onclick="openExcelSheet('${req.id}')" class="text-[8.5px] text-sky-700 hover:text-sky-800 font-bold uppercase tracking-wider flex items-center gap-0.5 bg-white px-1.5 py-0.5 rounded-md border border-slate-150 shrink-0">
+                                <i data-lucide="file-spreadsheet" class="w-3 h-3"></i> View Sheet
+                            </button>
+                        </div>
+
+                        <div class="grid grid-cols-2 gap-2 pt-1 border-t border-slate-50">
+                            <button onclick="triggerApprove('${req.id}', 'pass')" class="bg-emerald-600 hover:bg-emerald-700 text-white text-[10.5px] font-bold py-1.5 rounded-xl transition">Approve</button>
+                            <button onclick="triggerRejectFeedback('${req.id}', 'pass')" class="bg-slate-50 border border-slate-200 text-slate-700 hover:bg-slate-100 text-[10.5px] font-bold py-1.5 rounded-xl transition">Reject & Feedback</button>
+                        </div>
+                    `;
+                    passesList.appendChild(card);
+                }
+
+                // Task Type 3: Scrutiny Failure Checks
+                else if (req.hitlType === "FailApproval") {
+                    failCount++;
+                    const card = document.createElement('div');
+                    card.className = "bg-white p-4 lg:p-5 rounded-2xl border border-slate-200/60 shadow-soft space-y-3.5 hover:border-slate-300 transition animate-fade-in shrink-0";
+                    card.innerHTML = `
+                        <div class="flex justify-between items-start">
+                            <div class="space-y-0.5">
+                                <span class="text-[9px] font-code font-bold text-[#005A9C] tracking-wide block">ID: ${req.id}</span>
+                                <h4 class="text-xs font-bold text-slate-800 leading-tight">${req.customer}</h4>
+                            </div>
+                            <span class="text-[9px] font-bold text-amber-600 bg-amber-50 px-2 py-0.5 rounded-md border border-amber-100 shrink-0">Task 3</span>
+                        </div>
+
+                        <div class="p-2.5 rounded-xl bg-rose-50/50 border border-rose-100/60 flex items-center justify-between">
+                            <span class="text-[9.5px] font-bold text-rose-800 flex items-center gap-1">
+                                <span class="w-1 h-1 rounded-full bg-rose-500"></span> Scrutiny Failed
+                            </span>
+                            <button onclick="openFailureReasons('${req.id}')" class="text-[8.5px] text-rose-700 hover:text-rose-800 font-bold uppercase tracking-wider flex items-center gap-0.5 bg-white px-1.5 py-0.5 rounded-md border border-slate-150 shrink-0">
+                                <i data-lucide="shield-alert" class="w-3 h-3"></i> View Failures
+                            </button>
+                        </div>
+
+                        <div class="grid grid-cols-2 gap-2 pt-1 border-t border-slate-50">
+                            <button onclick="triggerApprove('${req.id}', 'fail')" class="bg-emerald-600 hover:bg-emerald-700 text-white text-[10.5px] font-bold py-1.5 rounded-xl transition">Approve</button>
+                            <button onclick="triggerRejectFeedback('${req.id}', 'fail')" class="bg-slate-50 border border-slate-200 text-slate-700 hover:bg-slate-100 text-[10.5px] font-bold py-1.5 rounded-xl transition">Reject & Feedback</button>
+                        </div>
+                    `;
+                    failsList.appendChild(card);
+                }
+            });
+
+            if (rejCount === 0) rejectionsList.innerHTML = `<div class="text-center text-xs text-slate-400 py-12 bg-white rounded-2xl border border-dashed border-slate-200 font-medium w-full">Clear. No pending rejections.</div>`;
+            if (passCount === 0) passesList.innerHTML = `<div class="text-center text-xs text-slate-400 py-12 bg-white rounded-2xl border border-dashed border-slate-200 font-medium w-full">Clear. No pending approvals.</div>`;
+            if (failCount === 0) failsList.innerHTML = `<div class="text-center text-xs text-slate-400 py-12 bg-white rounded-2xl border border-dashed border-slate-200 font-medium w-full">Clear. No pending failures.</div>`;
+
+            document.getElementById('col-count-rejections').innerText = rejCount;
+            document.getElementById('col-count-passes').innerText = passCount;
+            document.getElementById('col-count-fails').innerText = failCount;
+        }
+
+        function openModal(modalId) {
+            document.getElementById(modalId).classList.remove('hidden');
+        }
+
+        function closeModal(modalId) {
+            document.getElementById(modalId).classList.add('hidden');
+        }
+
+        function openExcelSheet(requestId) {
+            const req = appState.requests.find(r => r.id === requestId);
+            if (!req) return;
+            document.getElementById('excel-td-name').innerText = req.customer;
+            document.getElementById('excel-td-amount').innerText = req.amount;
+            document.getElementById('excel-sheet-name').innerText = `BMO_Pass_Audit_${req.id.replace(/-/g, '_')}.xlsx`;
+            openModal('modal-excel-view');
+        }
+
+        function openFailureReasons(requestId) {
+            const req = appState.requests.find(r => r.id === requestId);
+            if (!req) return;
+
+            const container = document.getElementById('discrepancy-log-container');
+            container.innerHTML = "";
+
+            if (req.scrutinyFailures && req.scrutinyFailures.length > 0) {
+                req.scrutinyFailures.forEach(failType => {
+                    let desc = "";
+                    if (failType === "date mismatch") {
+                        desc = "The promissory note signing date does not match the system schedule boarding log timeline dates.";
+                    } else if (failType === "entity mismatch") {
+                        desc = "Borrower legal entity corporate name extracted via OCR conflicts with corporate filings registry database.";
+                    } else if (failType === "ssn mismatch") {
+                        desc = "Primary guarantor Social Security Number registry records do not match records on Boarding Data Sheets.";
+                    }
+
+                    const subSection = document.createElement('div');
+                    subSection.className = "flex items-start gap-2.5";
+                    subSection.innerHTML = `
+                        <span class="text-rose-500 font-extrabold text-sm leading-none">•</span>
+                        <div>
+                            <strong class="font-bold text-slate-700 capitalize text-xs">${failType}</strong>
+                            <p class="text-[10.5px] text-slate-400 mt-0.5 leading-relaxed">${desc}</p>
+                        </div>
+                    `;
+                    container.appendChild(subSection);
+                });
+            } else {
+                container.innerHTML = `<p class="text-[10.5px] text-slate-400">No discrepancies logged on the audit channel for this record.</p>`;
+            }
+
+            openModal('modal-fail-reasons');
+        }
+
+        let approveTargetId = null;
+        let approveTargetType = null;
+
+        function triggerApprove(requestId, type) {
+            approveTargetId = requestId;
+            approveTargetType = type;
+
+            const text = document.getElementById('confirm-modal-text');
+            if (type === 'rejection') {
+                text.innerText = `Confirm validation and file rejection for loan request ${requestId}. This will finalize rejection and archive this record as Rejected/Failed.`;
+            } else if (type === 'pass') {
+                text.innerText = `Confirm releasing verified prebooking parameters for ${requestId}. Prebooking data sheets will import successfully to banking ledgers.`;
+            } else if (type === 'fail') {
+                text.innerText = `Authorize and execute scrutiny rejection for ${requestId}. The request will be set to Rejected and routed to the manual scrutiny queue.`;
+            }
+
+            document.getElementById('btn-modal-confirm-approve').onclick = executeApproveAction;
+            openModal('modal-approve-confirm');
+        }
+
+        function executeApproveAction() {
+            if (!approveTargetId) return;
+
+            const req = appState.requests.find(r => r.id === approveTargetId);
+            if (req) {
+                if (approveTargetType === 'rejection') {
+                    req.stage = "Rejected";
+                    req.status = "Failed";
+                    req.hitlStatus = "Approved";
+                    req.notes = "Rejection approved by Operations Desk. Missing documents/approvals validated.";
+                } else if (approveTargetType === 'pass') {
+                    req.stage = "Completed";
+                    req.status = "Passed";
+                    req.hitlStatus = "Approved";
+                    req.notes = "Prebooking authorization approved. Released successfully to ledger.";
+                } else if (approveTargetType === 'fail') {
+                    req.stage = "Document Scrutiny";
+                    req.status = "In Progress";
+                    req.hitlStatus = "Approved";
+                    req.hitlType = null;
+                    req.notes = "Scrutiny failure approved by Operations Desk. Rerouted back to the active Document Scrutiny queue.";
+                }
+                saveState();
+                renderAll();
+            }
+
+            closeModal('modal-approve-confirm');
+            approveTargetId = null;
+            approveTargetType = null;
+        }
+
+        let feedbackTargetId = null;
+        let feedbackTargetType = null;
+
+        function triggerRejectFeedback(requestId, type) {
+            feedbackTargetId = requestId;
+            feedbackTargetType = type;
+
+            document.getElementById('feedback-notes').value = "";
+            const container = document.getElementById('feedback-prefill-container');
+            container.innerHTML = "";
+
+            if (type === 'rejection') {
+                const tags = ["Boarding Data Sheet Missing", "Promissory Note Missing", "LLA Missing", "No Approval Found"];
+                tags.forEach(t => {
+                    const btn = document.createElement('button');
+                    btn.type = "button";
+                    btn.onclick = () => injectFeedbackText(`Discrepancy: ${t}. `);
+                    btn.className = "bg-rose-50 text-rose-700 hover:bg-rose-100/70 border border-rose-100 px-2 py-1 rounded text-[10px] font-bold transition";
+                    btn.innerText = `+ ${t}`;
+                    container.appendChild(btn);
+                });
+            } else if (type === 'fail') {
+                const tags = ["date mismatch", "entity mismatch", "ssn mismatch"];
+                tags.forEach(t => {
+                    const btn = document.createElement('button');
+                    btn.type = "button";
+                    btn.onclick = () => injectFeedbackText(`Discrepancy: ${t}. `);
+                    btn.className = "bg-amber-50 text-amber-700 hover:bg-amber-100/70 border border-amber-100 px-2 py-1 rounded text-[10px] font-bold transition";
+                    btn.innerText = `+ ${t}`;
+                    container.appendChild(btn);
+                });
+            } else {
+                const tags = ["General Document Audit Missing", "Boarding Sheet Signature Mismatch"];
+                tags.forEach(t => {
+                    const btn = document.createElement('button');
+                    btn.type = "button";
+                    btn.onclick = () => injectFeedbackText(`Discrepancy: ${t}. `);
+                    btn.className = "bg-sky-50 text-sky-700 hover:bg-sky-100/70 border border-sky-100 px-2 py-1 rounded text-[10px] font-bold transition";
+                    btn.innerText = `+ ${t}`;
+                    container.appendChild(btn);
+                });
+            }
+
+            openModal('modal-feedback');
+        }
+
+        function injectFeedbackText(text) {
+            const area = document.getElementById('feedback-notes');
+            area.value = area.value + text;
+        }
+
+        function submitFeedbackForm(event) {
+            event.preventDefault();
+            if (!feedbackTargetId) return;
+
+            const customFeedbackNotes = document.getElementById('feedback-notes').value;
+            const req = appState.requests.find(r => r.id === feedbackTargetId);
+
+            if (req) {
+                if (feedbackTargetType === 'rejection') {
+                    req.stage = "Intake";
+                    req.status = "In Progress";
+                    req.hitlStatus = null;
+                    req.hitlType = null;
+                    req.notes = `Returned to Intake queue. Feedback: ${customFeedbackNotes}`;
+                } else if (feedbackTargetType === 'pass') {
+                    req.stage = "Document Scrutiny";
+                    req.status = "In Progress";
+                    req.hitlStatus = null;
+                    req.hitlType = null;
+                    req.notes = `Diverted back to manual scrutiny queue. Feedback: ${customFeedbackNotes}`;
+                } else if (feedbackTargetType === 'fail') {
+                    req.stage = "Document Scrutiny";
+                    req.status = "In Progress";
+                    req.hitlStatus = null;
+                    req.hitlType = null;
+                    req.notes = `Discrepancy audit outcome challenged. Diverted back to manual scrutiny: ${customFeedbackNotes}`;
+                }
+                saveState();
+                renderAll();
+            }
+
+            closeModal('modal-feedback');
+            feedbackTargetId = null;
+            feedbackTargetType = null;
+        }
+
+        window.addEventListener('DOMContentLoaded', initStore);
+    </script>
+</body>
+</html>
