@@ -1,0 +1,788 @@
+{
+    "schema": "GoRules/ZenEngine Expression Mapping",
+    "version": "1.0",
+    "nodes": [
+        {
+            "ruleId": "S1-R1-D",
+            "step": "1",
+            "name": "Loan Fulfilment Request from Customer",
+            "category": "Validation gate",
+            "zenExpression": {
+                "computations": {},
+                "validation": "borrower_name != null and (customer_id != null or facility_ref != null) and requested_amount > 0 and value_date != null and channel != null"
+            },
+            "onFailure": {
+                "action": "Create missing-information task; case does not proceed",
+                "requiresHITL": "No"
+            }
+        },
+        {
+            "ruleId": "S1-R4",
+            "step": "1",
+            "name": "Loan Fulfilment Request from Customer",
+            "category": "Validation gate",
+            "zenExpression": {
+                "computations": {},
+                "validation": "borrower != null and requested_amount != null and currency != null and channel != null and received_timestamp != null"
+            },
+            "onFailure": {
+                "action": "Create missing-information task instead of proceeding",
+                "requiresHITL": "No"
+            }
+        },
+        {
+            "ruleId": "S2-R4",
+            "step": "2",
+            "name": "Receive Loan Request / Register Case",
+            "category": "Validation",
+            "zenExpression": {
+                "computations": {
+                    "missing_docs": "checklist.required_documents - inventory.received_documents"
+                },
+                "validation": "if missing_docs.count > 0 then openHold('DOCUMENT', missing_docs)"
+            },
+            "onFailure": {
+                "action": "Missing documents flagged as open holds / missing information",
+                "requiresHITL": "No"
+            }
+        },
+        {
+            "ruleId": "S2-R5",
+            "step": "2",
+            "name": "Receive Loan Request / Register Case",
+            "category": "Derivation",
+            "zenExpression": {
+                "computations": {
+                    "case_status": "duplicate_flag ? 'DUPLICATE_REVIEW' : (missing_documents.count > 0 ? 'PENDING_INFO' : (owner != null ? 'READY_FOR_PRE_MAKER' : 'REGISTERED'))"
+                },
+                "validation": "true"
+            },
+            "onFailure": {
+                "action": "Status drives queue visibility and SLA clock",
+                "requiresHITL": "No"
+            }
+        },
+        {
+            "ruleId": "S3-R4",
+            "step": "3",
+            "name": "Signature Verification",
+            "category": "Validation",
+            "zenExpression": {
+                "computations": {},
+                "validation": "requested_amount <= signatory.signing_limit and facility_id IN signatory.facility_scope"
+            },
+            "onFailure": {
+                "action": "Route for exception or additional authorization",
+                "requiresHITL": "Yes - additional authorization"
+            }
+        },
+        {
+            "ruleId": "S3-R5-D",
+            "step": "3",
+            "name": "Signature Verification",
+            "category": "Derivation",
+            "zenExpression": {
+                "computations": {},
+                "validation": "if S3-R2.result == FAIL then createException(type='SIGNATURE_MISMATCH', reason=mismatch_reason, evidence=source_evidence, confidence=confidence)"
+            },
+            "onFailure": {
+                "action": "Exception package created; GenAI narrative attached (S3-R5-G)",
+                "requiresHITL": "Yes - Maker reviews package"
+            }
+        },
+        {
+            "ruleId": "S4-R5-D",
+            "step": "4",
+            "name": "Document / Identity Verification",
+            "category": "Validation gate",
+            "zenExpression": {
+                "computations": {},
+                "validation": "ocr_confidence >= 0.85 and unreadable_areas.count == 0"
+            },
+            "onFailure": {
+                "action": "Route to human review instead of auto-validation",
+                "requiresHITL": "Yes - human review on fail"
+            }
+        },
+        {
+            "ruleId": "S4-R6",
+            "step": "4",
+            "name": "Document / Identity Verification",
+            "category": "Validation",
+            "zenExpression": {
+                "computations": {
+                    "readiness": "pass ? readiness : 'BLOCKED' (partial validation may continue)"
+                },
+                "validation": "all(criticalDocs, d -> d IN acceptedDocs)"
+            },
+            "onFailure": {
+                "action": "Readiness remains blocked; pre-Maker validation continues partially",
+                "requiresHITL": "No"
+            }
+        },
+        {
+            "ruleId": "S6-R3",
+            "step": "6",
+            "name": "Limit Availability Checks",
+            "category": "Validation",
+            "zenExpression": {
+                "computations": {},
+                "validation": "requested_currency == facility.currency or requested_currency IN facility.approved_currencies"
+            },
+            "onFailure": {
+                "action": "Currency mismatch exception",
+                "requiresHITL": "No"
+            }
+        },
+        {
+            "ruleId": "S6-R5-D",
+            "step": "6",
+            "name": "Limit Availability Checks",
+            "category": "Derivation / Validation",
+            "zenExpression": {
+                "computations": {
+                    "borrowing_base": "sum(eligible_collateral) - reserves"
+                },
+                "validation": "requested_amount <= borrowing_base"
+            },
+            "onFailure": {
+                "action": "Over-advance detected (feeds S6-R6)",
+                "requiresHITL": "No"
+            }
+        },
+        {
+            "ruleId": "S6-R6",
+            "step": "6",
+            "name": "Limit Availability Checks",
+            "category": "Validation gate",
+            "zenExpression": {
+                "computations": {},
+                "validation": "over_advance_amount == 0 or approval_evidence != null"
+            },
+            "onFailure": {
+                "action": "Credit hold unless approval evidence exists",
+                "requiresHITL": "Yes - approval decision"
+            }
+        },
+        {
+            "ruleId": "S7-R2-D",
+            "step": "7",
+            "name": "Draw Amount vs Credit Agreement Conditions",
+            "category": "Validation",
+            "zenExpression": {
+                "computations": {},
+                "validation": "normalizePurpose(stated_purpose) IN permitted_purposes"
+            },
+            "onFailure": {
+                "action": "Purpose-violation hold",
+                "requiresHITL": "No"
+            }
+        },
+        {
+            "ruleId": "S7-R3",
+            "step": "7",
+            "name": "Draw Amount vs Credit Agreement Conditions",
+            "category": "Validation",
+            "zenExpression": {
+                "computations": {},
+                "validation": "ca.availability_start <= value_date and value_date <= ca.availability_end"
+            },
+            "onFailure": {
+                "action": "Request-outside-period hold",
+                "requiresHITL": "No"
+            }
+        },
+        {
+            "ruleId": "S7-R4",
+            "step": "7",
+            "name": "Draw Amount vs Credit Agreement Conditions",
+            "category": "Validation",
+            "zenExpression": {
+                "computations": {},
+                "validation": "all(cp_checklist, cp -> cp.status IN ['SATISFIED','WAIVED'])"
+            },
+            "onFailure": {
+                "action": "Credit/legal hold on open CPs",
+                "requiresHITL": "No"
+            }
+        },
+        {
+            "ruleId": "S7-R6-D",
+            "step": "7",
+            "name": "Draw Amount vs Credit Agreement Conditions",
+            "category": "Derivation / Validation",
+            "zenExpression": {
+                "computations": {
+                    "max_draw": "evalDrawFormula(formula_params, eligible_collateral, reserves)"
+                },
+                "validation": "requested_amount <= max_draw"
+            },
+            "onFailure": {
+                "action": "Draw-formula breach exception",
+                "requiresHITL": "No"
+            }
+        },
+        {
+            "ruleId": "S7-R7",
+            "step": "7",
+            "name": "Draw Amount vs Credit Agreement Conditions",
+            "category": "Validation",
+            "zenExpression": {
+                "computations": {},
+                "validation": "all(failedConditions, c -> c.waiver_approval_ref != null and c.approval_status == 'APPROVED')"
+            },
+            "onFailure": {
+                "action": "Open hold until waiver attached",
+                "requiresHITL": "No"
+            }
+        },
+        {
+            "ruleId": "S8-R1",
+            "step": "8",
+            "name": "Provisional Transaction Approval",
+            "category": "Validation gate",
+            "zenExpression": {
+                "computations": {},
+                "validation": "provisional_approval_requested IMPLIES openExceptions.count > 0"
+            },
+            "onFailure": {
+                "action": "Provisional path not applicable; continue standard flow",
+                "requiresHITL": "Yes - HITL initiates request"
+            }
+        },
+        {
+            "ruleId": "S8-R2",
+            "step": "8",
+            "name": "Provisional Transaction Approval",
+            "category": "Validation gate",
+            "zenExpression": {
+                "computations": {},
+                "validation": "not (aml_hit or sanctions_hit or regulatory_block or unresolved_compliance_hold) or compliance_clearance == 'CLEARED'"
+            },
+            "onFailure": {
+                "action": "Provisional path blocked",
+                "requiresHITL": "No"
+            }
+        },
+        {
+            "ruleId": "S8-R3",
+            "step": "8",
+            "name": "Provisional Transaction Approval",
+            "category": "Validation gate",
+            "zenExpression": {
+                "computations": {},
+                "validation": "provisionalApproval.reason_code != null and provisionalApproval.comments != ''"
+            },
+            "onFailure": {
+                "action": "Recommendation cannot be submitted without reason",
+                "requiresHITL": "Yes - Maker supplies reason"
+            }
+        },
+        {
+            "ruleId": "S8-R4",
+            "step": "8",
+            "name": "Provisional Transaction Approval",
+            "category": "Validation",
+            "zenExpression": {
+                "computations": {},
+                "validation": "provisionalApproval.conditions.count == openHolds.count and all(conditions, c -> c.owner_type != null and c.due_evidence != null)"
+            },
+            "onFailure": {
+                "action": "Submission blocked until all conditions tracked",
+                "requiresHITL": "No"
+            }
+        },
+        {
+            "ruleId": "S8-R5",
+            "step": "8",
+            "name": "Provisional Transaction Approval",
+            "category": "Validation gate",
+            "zenExpression": {
+                "computations": {},
+                "validation": "finalApproval.user_id != makerRecommendation.user_id and finalApproval.role == 'CHECKER'"
+            },
+            "onFailure": {
+                "action": "Approval rejected by system; route to distinct Checker",
+                "requiresHITL": "Yes - enforces Maker/Checker split"
+            }
+        },
+        {
+            "ruleId": "S8-R6",
+            "step": "8",
+            "name": "Provisional Transaction Approval",
+            "category": "Validation gate",
+            "zenExpression": {
+                "computations": {},
+                "validation": "checkerDecision IN ['APPROVED','REJECTED'] and checkerDecision.timestamp != null"
+            },
+            "onFailure": {
+                "action": "Case waits in Checker queue until decision recorded",
+                "requiresHITL": "Yes - Checker decides"
+            }
+        },
+        {
+            "ruleId": "S8-R7",
+            "step": "8",
+            "name": "Provisional Transaction Approval",
+            "category": "Validation",
+            "zenExpression": {
+                "computations": {},
+                "validation": "provisional_reference.startsWith(case_id) and production_transaction_id == null"
+            },
+            "onFailure": {
+                "action": "PoC guard: no production transaction ID created",
+                "requiresHITL": "No"
+            }
+        },
+        {
+            "ruleId": "S9-R1-D",
+            "step": "9",
+            "name": "Rates Retrieval",
+            "category": "Validation",
+            "zenExpression": {
+                "computations": {},
+                "validation": "pricingSchedule.benchmark == extracted_benchmark"
+            },
+            "onFailure": {
+                "action": "Benchmark mismatch: pricing hold",
+                "requiresHITL": "No"
+            }
+        },
+        {
+            "ruleId": "S9-R4",
+            "step": "9",
+            "name": "Rates Retrieval",
+            "category": "Validation",
+            "zenExpression": {
+                "computations": {},
+                "validation": "rate_timestamp >= windowStart(value_date) and rate_timestamp <= windowEnd(value_date)"
+            },
+            "onFailure": {
+                "action": "Pricing exception (stale rate)",
+                "requiresHITL": "No"
+            }
+        },
+        {
+            "ruleId": "S9-R5",
+            "step": "9",
+            "name": "Rates Retrieval",
+            "category": "Validation",
+            "zenExpression": {
+                "computations": {},
+                "validation": "rate_currency == requested_currency and requested_currency == facility_currency"
+            },
+            "onFailure": {
+                "action": "Pricing hold (currency mismatch)",
+                "requiresHITL": "No"
+            }
+        },
+        {
+            "ruleId": "S10-R1",
+            "step": "10",
+            "name": "Rates Quotation / Pricing Workbench",
+            "category": "Derivation",
+            "zenExpression": {
+                "computations": {
+                    "all_in_rate": "benchmark_rate + spread_margin"
+                },
+                "validation": "true"
+            },
+            "onFailure": {
+                "action": "n/a (pure calculation)",
+                "requiresHITL": "No"
+            }
+        },
+        {
+            "ruleId": "S10-R2",
+            "step": "10",
+            "name": "Rates Quotation / Pricing Workbench",
+            "category": "Validation",
+            "zenExpression": {
+                "computations": {},
+                "validation": "spread_margin != null"
+            },
+            "onFailure": {
+                "action": "Pricing hold",
+                "requiresHITL": "No"
+            }
+        },
+        {
+            "ruleId": "S10-R3",
+            "step": "10",
+            "name": "Rates Quotation / Pricing Workbench",
+            "category": "Validation gate",
+            "zenExpression": {
+                "computations": {},
+                "validation": "spread >= policy.min_spread or pricing_approval != null"
+            },
+            "onFailure": {
+                "action": "Low-spread exception requires approval",
+                "requiresHITL": "Yes - pricing approval"
+            }
+        },
+        {
+            "ruleId": "S10-R4",
+            "step": "10",
+            "name": "Rates Quotation / Pricing Workbench",
+            "category": "Validation",
+            "zenExpression": {
+                "computations": {},
+                "validation": "spread <= policy.max_spread"
+            },
+            "onFailure": {
+                "action": "Pricing outside allowed band: exception",
+                "requiresHITL": "No"
+            }
+        },
+        {
+            "ruleId": "S10-R5",
+            "step": "10",
+            "name": "Rates Quotation / Pricing Workbench",
+            "category": "Validation gate",
+            "zenExpression": {
+                "computations": {},
+                "validation": "adjusted_spread == null or (maker_id != null and maker_comments != '')"
+            },
+            "onFailure": {
+                "action": "Unattributed adjustment rejected",
+                "requiresHITL": "Yes - Maker owns adjustment"
+            }
+        },
+        {
+            "ruleId": "S10-R7-D",
+            "step": "10",
+            "name": "Rates Quotation / Pricing Workbench",
+            "category": "Validation",
+            "zenExpression": {
+                "computations": {},
+                "validation": "abs(document_pricing - maker_quote) <= policy.pricing_tolerance"
+            },
+            "onFailure": {
+                "action": "Pricing-mismatch flag raised",
+                "requiresHITL": "No"
+            }
+        },
+        {
+            "ruleId": "S10-R8",
+            "step": "10",
+            "name": "Rates Quotation / Pricing Workbench",
+            "category": "Validation",
+            "zenExpression": {
+                "computations": {},
+                "validation": "customer_acceptance_time <= quote_time + quote_validity_window"
+            },
+            "onFailure": {
+                "action": "Expired quote triggers re-quote loop",
+                "requiresHITL": "No"
+            }
+        },
+        {
+            "ruleId": "S10-R9",
+            "step": "10",
+            "name": "Rates Quotation / Pricing Workbench",
+            "category": "Routing / Gate",
+            "zenExpression": {
+                "computations": {},
+                "validation": "pricingException == null or (exception.owner_type != null and exception.review_status IN ['RECORDED','REVIEWED'])"
+            },
+            "onFailure": {
+                "action": "Exception held until routed; Checker validates if needed",
+                "requiresHITL": "Yes - Maker records, Checker validates"
+            }
+        },
+        {
+            "ruleId": "S11-R1",
+            "step": "11",
+            "name": "Confirm Disbursement Details with Customer",
+            "category": "Validation gate",
+            "zenExpression": {
+                "computations": {},
+                "validation": "customer_acceptance_status == 'CONFIRMED' and confirmation_timestamp != null and evidence_reference != null"
+            },
+            "onFailure": {
+                "action": "Final readiness blocked",
+                "requiresHITL": "No"
+            }
+        },
+        {
+            "ruleId": "S11-R2",
+            "step": "11",
+            "name": "Confirm Disbursement Details with Customer",
+            "category": "Validation",
+            "zenExpression": {
+                "computations": {},
+                "validation": "confirmed_amount == approved_amount"
+            },
+            "onFailure": {
+                "action": "Customer hold (amount mismatch)",
+                "requiresHITL": "No"
+            }
+        },
+        {
+            "ruleId": "S11-R3",
+            "step": "11",
+            "name": "Confirm Disbursement Details with Customer",
+            "category": "Validation",
+            "zenExpression": {
+                "computations": {},
+                "validation": "confirmed_rate == all_in_rate and confirmation.quote_id == rateQuote.id"
+            },
+            "onFailure": {
+                "action": "Pricing/customer hold",
+                "requiresHITL": "No"
+            }
+        },
+        {
+            "ruleId": "S11-R4",
+            "step": "11",
+            "name": "Confirm Disbursement Details with Customer",
+            "category": "Validation",
+            "zenExpression": {
+                "computations": {},
+                "validation": "confirmed_value_date == approved_value_date"
+            },
+            "onFailure": {
+                "action": "Rework task created",
+                "requiresHITL": "No"
+            }
+        },
+        {
+            "ruleId": "S11-R5",
+            "step": "11",
+            "name": "Confirm Disbursement Details with Customer",
+            "category": "Validation gate",
+            "zenExpression": {
+                "computations": {},
+                "validation": "customer_response == 'REJECTED' IMPLIES (case_status IN ['TERMINATED','REPRICING'] and decision_by != null)"
+            },
+            "onFailure": {
+                "action": "Case cannot remain in limbo after rejection",
+                "requiresHITL": "Yes - Maker decides re-price vs terminate"
+            }
+        },
+        {
+            "ruleId": "S11-R6",
+            "step": "11",
+            "name": "Confirm Disbursement Details with Customer",
+            "category": "Routing",
+            "zenExpression": {
+                "computations": {},
+                "validation": "negotiation_flag == true IMPLIES next_task == 'PRICING_WORKBENCH'"
+            },
+            "onFailure": {
+                "action": "Re-quote loop inside Maker phase",
+                "requiresHITL": "Yes - Maker handles re-quote"
+            }
+        },
+        {
+            "ruleId": "S12-R2",
+            "step": "12",
+            "name": "Input Transaction + Loan Instruction Sheet",
+            "category": "Validation gate",
+            "zenExpression": {
+                "computations": {},
+                "validation": "all([borrower_id, facility_id, amount, currency, value_date, settlement_account, rate], f -> f != null)"
+            },
+            "onFailure": {
+                "action": "Document/operations hold",
+                "requiresHITL": "No"
+            }
+        },
+        {
+            "ruleId": "S12-R3-D",
+            "step": "12",
+            "name": "Input Transaction + Loan Instruction Sheet",
+            "category": "Validation",
+            "zenExpression": {
+                "computations": {},
+                "validation": "normalize(extracted_amount) == normalize(instruction_amount) and instruction_amount <= facility_agreement_amount"
+            },
+            "onFailure": {
+                "action": "Field-mismatch exception",
+                "requiresHITL": "No"
+            }
+        },
+        {
+            "ruleId": "S12-R4",
+            "step": "12",
+            "name": "Input Transaction + Loan Instruction Sheet",
+            "category": "Validation",
+            "zenExpression": {
+                "computations": {},
+                "validation": "final_amount == approved_amount and approved_amount == confirmed_amount"
+            },
+            "onFailure": {
+                "action": "Downstream-mismatch prevention hold",
+                "requiresHITL": "No"
+            }
+        },
+        {
+            "ruleId": "S12-R5-D",
+            "step": "12",
+            "name": "Input Transaction + Loan Instruction Sheet",
+            "category": "Validation",
+            "zenExpression": {
+                "computations": {},
+                "validation": "beneficiary_name != null and account_number != null and (iban != null or (routing_code != null and swift != null))"
+            },
+            "onFailure": {
+                "action": "Payment-detail hold",
+                "requiresHITL": "No"
+            }
+        },
+        {
+            "ruleId": "S12-R6",
+            "step": "12",
+            "name": "Input Transaction + Loan Instruction Sheet",
+            "category": "Validation gate",
+            "zenExpression": {
+                "computations": {},
+                "validation": "checkerSubmission.allowed == (maker_completion_status == 'FINALIZED')"
+            },
+            "onFailure": {
+                "action": "Submission blocked",
+                "requiresHITL": "Yes - Maker finalizes"
+            }
+        },
+        {
+            "ruleId": "S12-R7",
+            "step": "12",
+            "name": "Input Transaction + Loan Instruction Sheet",
+            "category": "Validation",
+            "zenExpression": {
+                "computations": {},
+                "validation": "all(auditTrail.changes, c -> c.original_value != null and c.corrected_value != null and c.maker_id != null and c.timestamp != null)"
+            },
+            "onFailure": {
+                "action": "Save rejected without complete audit trail",
+                "requiresHITL": "No"
+            }
+        },
+        {
+            "ruleId": "S13-R5",
+            "step": "13",
+            "name": "AML Check and Fraud Screening",
+            "category": "Validation gate",
+            "zenExpression": {
+                "computations": {},
+                "validation": "aml_hit == false or clearance_status IN ['CLEARED','ESCALATED']"
+            },
+            "onFailure": {
+                "action": "Compliance clearance required",
+                "requiresHITL": "Yes - compliance clearance"
+            }
+        },
+        {
+            "ruleId": "S13-R7-D",
+            "step": "13",
+            "name": "AML Check and Fraud Screening",
+            "category": "Validation",
+            "zenExpression": {
+                "computations": {},
+                "validation": "abs(invoice_amount - requested_amount) <= policy.invoice_tolerance and purposeMatch(invoice_purpose, loan_purpose) and invoice_beneficiary == payment_beneficiary"
+            },
+            "onFailure": {
+                "action": "Purpose-mismatch compliance hold",
+                "requiresHITL": "No"
+            }
+        },
+        {
+            "ruleId": "S13-R10",
+            "step": "13",
+            "name": "AML Check and Fraud Screening",
+            "category": "Validation gate",
+            "zenExpression": {
+                "computations": {},
+                "validation": "all([aml_status, sanctions_status, fraud_status], s -> s IN ['CLEAR','DISPOSITIONED_CLEARED'])"
+            },
+            "onFailure": {
+                "action": "HARD GATE before final readiness",
+                "requiresHITL": "No"
+            }
+        },
+        {
+            "ruleId": "XH-R1",
+            "step": "XH",
+            "name": "Cross-Step: Exception & Open Hold Package",
+            "category": "Validation",
+            "zenExpression": {
+                "computations": {},
+                "validation": "all(ruleExecutions, e -> e.rule_id != null and e.inputs != null and e.outcome != null and e.evidence_ref != null)"
+            },
+            "onFailure": {
+                "action": "Execution rejected without traceability record",
+                "requiresHITL": "No"
+            }
+        },
+        {
+            "ruleId": "XH-R2",
+            "step": "XH",
+            "name": "Cross-Step: Exception & Open Hold Package",
+            "category": "Validation",
+            "zenExpression": {
+                "computations": {},
+                "validation": "all(openHolds, h -> h.hold_type != null and h.owner_type != null)"
+            },
+            "onFailure": {
+                "action": "Hold creation rejected",
+                "requiresHITL": "No"
+            }
+        },
+        {
+            "ruleId": "XH-R3",
+            "step": "XH",
+            "name": "Cross-Step: Exception & Open Hold Package",
+            "category": "Validation",
+            "zenExpression": {
+                "computations": {},
+                "validation": "hold.category IN ['CREDIT','COMPLIANCE','PRICING','DOCUMENT','CUSTOMER_FUNDING']"
+            },
+            "onFailure": {
+                "action": "Generic 'blocked' status prevented",
+                "requiresHITL": "No"
+            }
+        },
+        {
+            "ruleId": "XH-R4",
+            "step": "XH",
+            "name": "Cross-Step: Exception & Open Hold Package",
+            "category": "Validation gate",
+            "zenExpression": {
+                "computations": {},
+                "validation": "hold.status == 'CLOSED' IMPLIES (hold.evidence_ref != null or hold.hitl_decision_id != null)"
+            },
+            "onFailure": {
+                "action": "Unsupported closure prevented",
+                "requiresHITL": "Yes - decision required"
+            }
+        },
+        {
+            "ruleId": "XH-R5-D",
+            "step": "XH",
+            "name": "Cross-Step: Exception & Open Hold Package",
+            "category": "Validation gate",
+            "zenExpression": {
+                "computations": {},
+                "validation": "holdRelease.actor_type == 'HUMAN' and holdRelease.hitl_decision_id != null"
+            },
+            "onFailure": {
+                "action": "System rejects any non-human hold release",
+                "requiresHITL": "Yes - human releases hold"
+            }
+        },
+        {
+            "ruleId": "ER-R1",
+            "step": "ER",
+            "name": "Cross-Step: Exception Readiness Check",
+            "category": "Validation gate",
+            "zenExpression": {
+                "computations": {},
+                "validation": "none(openHolds, h -> h.hard_block == true) BEFORE checkerSubmission"
+            },
+            "onFailure": {
+                "action": "Invalid escalation prevented",
+                "requiresHITL": "No"
+            }
+        }
+    ]
+}
