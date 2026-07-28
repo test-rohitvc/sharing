@@ -128,7 +128,6 @@ class RuleExecutionEngine:
 
     def compile(self, start_node_id: str | int):
         start_node_id = str(start_node_id)
-        valid_targets = set(self.nodes_config.keys()).union({"END"})
         
         # Build Graph
         workflow = StateGraph(GraphState)
@@ -141,35 +140,40 @@ class RuleExecutionEngine:
         workflow.add_edge(START, start_node_id)
 
         # ---------------------------------------------------------
-        # THE FIX: Static Path Mapping for Perfect Graph Visualization
+        # THE FIX: Directly return target arrays from the router
         # ---------------------------------------------------------
         for node_id, config in self.nodes_config.items():
             
-            # 1. Router returns a simple string representing the outcome
-            def get_status_router(nid: str):
-                def router(state: GraphState) -> str:
-                    return state.get("node_results", {}).get(nid, {}).get("status", "error")
+            # 1. The router dynamically returns the node name string OR the parallel node array. 
+            # LangGraph handles list returns natively.
+            def get_status_router(nid: str, cfg: dict):
+                def router(state: GraphState) -> Union[str, List[str]]:
+                    status = state.get("node_results", {}).get(nid, {}).get("status", "error")
+                    route_key = f"on{status.capitalize()}" # onPass, onFail, onError
+                    
+                    targets = cfg.get(route_key, "END")
+                    if isinstance(targets, str):
+                        return END if targets == "END" else str(targets)
+                    elif isinstance(targets, list):
+                        return [END if str(t) == "END" else str(t) for t in targets]
+                    return END
                 return router
             
-            # 2. Map standard strings to END node object or arrays for parallel processing
-            def resolve_targets(targets):
-                if isinstance(targets, str):
-                    return END if targets == "END" else str(targets)
-                if isinstance(targets, list):
-                    return [END if str(t) == "END" else str(t) for t in targets]
-                return END
-            
-            # 3. Create a strict dictionary. Langgraph parses this statically to draw lines!
-            path_map = {
-                "pass": resolve_targets(config.get("onPass", "END")),
-                "fail": resolve_targets(config.get("onFail", "END")),
-                "error": resolve_targets(config.get("onError", "END"))
-            }
+            # 2. Collect all possible unique destinations this node could reach
+            possible_destinations = set()
+            for route in ["onPass", "onFail", "onError"]:
+                targets = config.get(route, "END")
+                targets = [targets] if isinstance(targets, str) else targets
+                for t in targets:
+                    possible_destinations.add(END if str(t) == "END" else str(t))
 
+            # 3. Supply the list of possible destinations to LangGraph 
+            # This completely avoids dictionaries, preventing the "unhashable list" error,
+            # while giving LangGraph's visualizer everything it needs to draw the connections!
             workflow.add_conditional_edges(
                 node_id,
-                get_status_router(node_id), # Returns "pass", "fail", or "error"
-                path_map                    # Maps the string to the linked nodes
+                get_status_router(node_id, config),
+                list(possible_destinations)
             )
 
         return workflow.compile()
